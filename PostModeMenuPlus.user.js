@@ -1,28 +1,28 @@
 // ==UserScript==
-// @name         PostModeMenu+
-// @namespace    https://github.com/BrokenEagle
+// @name         PostModeMenu+ (OYP)
+// @namespace    https://github.com/CommentaryRequest/OYPJavaScripts
 // @version      9.10
 // @description  Provide additional functions on the post mode menu.
 // @source       https://danbooru.donmai.us/users/23799
 // @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^(?!https:\/\/\w+\.donmai\.us\/?(posts|settings)?\/?(\?|$)).*/
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @match        https://yukkuri.shiteitte.net/*
+// @exclude      /^(?!https:\/\/yukkuri\.shiteitte\.net\/?(posts|settings)?\/?(\?|$)).*/
+// @exclude      /^https://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @grant        none
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/PostModeMenuPlus.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/PostModeMenuPlus.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/PostModeMenuPlus.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/JavaScripts/master/PostModeMenuPlus.user.js
 // @require      https://cdn.jsdelivr.net/npm/dragselect@2.3.1/dist/ds.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/notice.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/menu.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/module.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/debug.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/utility.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/validate.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/storage.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/notice.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/network.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/danbooru.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/load.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/menu.js
 // ==/UserScript==
 
 /* global $ Danbooru JSPLib DragSelect */
@@ -1666,7 +1666,7 @@ function MenuFunctionsMulti(post_ids) {
             CopyToClipboard(post_ids, "post #", "", PMM.id_separator_char, true);
             break;
         case 'copy-link':
-            CopyToClipboard(post_ids, "https://danbooru.donmai.us/posts/", " ", PMM.id_separator_char, true);
+            CopyToClipboard(post_ids, "https://yukkuri.shiteitte.net/posts/", " ", PMM.id_separator_char, true);
             break;
         case 'commentary':
             CommentaryDialog(post_ids);
@@ -1726,7 +1726,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#post-mode-menu').append(JSPLib.menu.renderMenuFramework(MENU_CONFIG));
-    $('#pmm-general-settings').append(JSPLib.menu.renderDomainSelectors());
     $('#pmm-mode-settings-message').append(JSPLib.menu.renderExpandable("Additional setting details", MODE_SETTINGS_DETAILS));
     $('#pmm-mode-settings').append(JSPLib.menu.renderInputSelectors('available_modes', 'checkbox'));
     $('#pmm-mode-settings').append(JSPLib.menu.renderSortlist('mode_order'));

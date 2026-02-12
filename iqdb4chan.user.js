@@ -1,13 +1,14 @@
 // ==UserScript==
-// @name         IQDB 4chan
-// @namespace    https://github.com/BrokenEagle/JavaScripts
+// @name         IQDB 4chan (OYP)
+// @namespace    https://github.com/CommentaryRequest/OYPJavaScripts
 // @version      5
 // @source       https://danbooru.donmai.us/users/23799
-// @description  Danbooru IQDB checker for 4chan threads.
+// @description  One Yukkuri Place IQDB checker for 4chan threads.
 // @author       BrokenEagle
 // @match        *://boards.4chan.org/*/thread/*
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/stable/iqdb4chan.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/iqdb4chan.user.js
+// @updateURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/iqdb4chan.user.js
 // @require      https://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js
 // ==/UserScript==
 
@@ -71,14 +72,14 @@ async function checkThumbs() {
             let temp = await sleep(1000);
         }
         checkThumbs.async_requests++;
-        const resp = _$.getJSON('https://danbooru.donmai.us/iqdb_queries.json',{'url':$filethumbs[j].href},data=>{
+        const resp = _$.getJSON('https://yukkuri.shiteitte.net/iqdb_queries.json',{'url':$filethumbs[j].href},data=>{
             console.log("Data:",data.length);
             if (data.length > 0) {
                 let poststring = "";
                 for (let i=0;i<data.length;i++) {
                     let postid = data[i].post.id;
                     let scoreclass = similarityClass(data[i].score);
-                    poststring += `, <a href="http://danbooru.donmai.us/posts/${postid}" target="_blank" class="danbooru-post ${scoreclass}">post #${postid}</a>`;
+                    poststring += `, <a href="http://yukkuri.shiteitte.net/posts/${postid}" target="_blank" class="danbooru-post ${scoreclass}">post #${postid}</a>`;
                 }
                 let oldhtml = _$($filethumbs[j]).prev()[0].innerHTML;
                 _$($filethumbs[j]).prev()[0].innerHTML = oldhtml + poststring;

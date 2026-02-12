@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         RecentTagsCalc
-// @namespace    https://github.com/BrokenEagle/JavaScripts
+// @name         RecentTagsCalc (OYP)
+// @namespace    https://github.com/CommentaryRequest/OYPJavaScripts
 // @version      7.28
 // @description  Use different mechanism to calculate RecentTags.
 // @source       https://danbooru.donmai.us/users/23799

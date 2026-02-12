@@ -1,16 +1,17 @@
 // ==UserScript==
-// @name         IQDB Booru
-// @namespace    https://github.com/BrokenEagle/JavaScripts
+// @name         IQDB Booru (OYP)
+// @namespace    https://github.com/CommentaryRequest/OYPJavaScripts
 // @version      8
 // @source       https://danbooru.donmai.us/users/23799
-// @description  Danbooru IQDB checker for various Booru sites.
+// @description  One Yukkuri Place IQDB checker for various Booru sites.
 // @author       BrokenEagle
 // @match        *://gelbooru.com/index.php?page=post&s=list*
 // @match        *://chan.sankakucomplex.com/?*
 // @match        *://yande.re/post?*
 // @match        *://konachan.com/post?*
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/stable/iqdbbooru.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/iqdbbooru.user.js
+// @updateURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/iqdbbooru.user.js
 // @require      https://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js
 // ==/UserScript==
 
@@ -159,7 +160,7 @@ async function checkThumbs() {
             let temp = await sleep(1000);
         }
         checkThumbs.async_requests++;
-        const resp = _$.getJSON('https://danbooru.donmai.us/iqdb_queries.json',{'url':$filethumbs[j].src},data=>{
+        const resp = _$.getJSON('https://yukkuri.shiteitte.net/iqdb_queries.json',{'url':$filethumbs[j].src},data=>{
             console.log("Data:",data.length);
             if (data.length > 0) {
                 //Place a list of post(s) underneath the image
@@ -167,7 +168,7 @@ async function checkThumbs() {
                 for (let i=0;i<data.length;i++) {
                     let postid = data[i].post.id;
                     let scoreclass = similarityClass(data[i].score);
-                    postlist.push(`<a href="http://danbooru.donmai.us/posts/${postid}" target="_blank" class="danbooru-post ${scoreclass}">post #${postid}</a>`);
+                    postlist.push(`<a href="http://yukkuri.shiteitte.net/posts/${postid}" target="_blank" class="danbooru-post ${scoreclass}">post #${postid}</a>`);
                 }
                 if (checkThumbs.maxPosts < data.length) {
                     let newheight = site_config[window.location.host].startHeight + (15 * data.length);

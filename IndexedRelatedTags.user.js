@@ -1,31 +1,31 @@
 // ==UserScript==
-// @name         IndexedRelatedTags
+// @name         IndexedRelatedTags (OYP)
 // @namespace    https://github.com/BrokenEagle/JavaScripts
 // @version      3.10
 // @description  Uses Indexed DB for autocomplete, plus caching of other data.
 // @source       https://danbooru.donmai.us/users/23799
 // @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^(?!https:\/\/\w+\.donmai\.us\/((posts|upload_media_assets|uploads)\/\d+|uploads\/\d+\/assets\/\d+|settings)\/?(\?|$)).*/
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @match        https://yukkuri.shiteitte.net/*
+// @exclude      /^(?!https:\/\/yukkuri\.shiteitte\.net\/((posts|upload_media_assets|uploads)\/\d+|uploads\/\d+\/assets\/\d+|settings)\/?(\?|$)).*/
+// @exclude      /^https://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedRelatedTags.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedRelatedTags.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/IndexedRelatedTags.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/IndexedRelatedTags.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/notice.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/concurrency.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/statistics.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/menu.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/module.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/debug.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/utility.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/validate.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/storage.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/notice.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/concurrency.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/statistics.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/network.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/danbooru.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/load.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ Danbooru validate */
@@ -1530,7 +1530,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#indexed-related-tags').append(JSPLib.menu.renderMenuFramework(MENU_CONFIG));
-    $('#irt-general-settings').append(JSPLib.menu.renderDomainSelectors());
     $('#irt-related-tag-settings-message').append(JSPLib.menu.renderExpandable("Additional setting details", RELATED_TAG_SETTINGS_DETAILS));
     $('#irt-related-tag-settings').append(JSPLib.menu.renderInputSelectors('related_query_categories', 'checkbox'));
     $('#irt-related-tag-settings').append(JSPLib.menu.renderCheckbox('related_query_order_enabled'));

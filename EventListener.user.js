@@ -1,28 +1,28 @@
 // ==UserScript==
-// @name         EventListener
+// @name         EventListener (OYP)
 // @namespace    https://github.com/BrokenEagle/JavaScripts
 // @version      26.1
 // @description  Informs users of new events.
 // @source       https://danbooru.donmai.us/users/23799
 // @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @match        https://yukkuri.shiteitte.net/*
+// @exclude      /^https://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/EventListener.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/EventListener.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/EventListener.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/EventListener.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/notice.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/concurrency.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/menu.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/module.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/debug.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/utility.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/validate.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/storage.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/notice.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/concurrency.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/network.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/danbooru.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/load.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ Danbooru */
@@ -3974,7 +3974,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#event-listener').append(JSPLib.menu.renderMenuFramework(MENU_CONFIG));
-    $('#el-general-settings').append(JSPLib.menu.renderDomainSelectors());
     $('#el-display-settings').append(JSPLib.menu.renderCheckbox('display_event_notice'));
     $('#el-display-settings').append(JSPLib.menu.renderCheckbox('display_event_panel'));
     $('#el-display-settings').append(JSPLib.menu.renderTextinput('page_size', 10));

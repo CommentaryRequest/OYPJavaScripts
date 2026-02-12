@@ -1,33 +1,33 @@
 // ==UserScript==
-// @name         DisplayPostInfo
-// @namespace    https://github.com/BrokenEagle/JavaScripts
+// @name         DisplayPostInfo (OYP)
+// @namespace    https://github.com/CommentaryRequest/OYPJavaScripts
 // @version      12.15
 // @description  Display views, uploader, and other info to the user.
 // @source       https://danbooru.donmai.us/users/23799
 // @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^(?!https:\/\/\w+\.donmai\.us\/?(posts(\/\d+)?|settings)?\/?(\?|$)).*/
+// @match        https://yukkuri.shiteitte.net/*
+// @exclude      /^(?!https:\/\/yukkuri\.shiteitte\.net\/?(posts(\/\d+)?|settings)?\/?(\?|$)).*/
 // @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/DisplayPostInfo.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/DisplayPostInfo.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/DisplayPostInfo.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/master/DisplayPostInfo.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/localforage/1.5.2/localforage.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-getitems@1.4.2/dist/localforage-getitems.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/core.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/md5.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/concurrency.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/statistics.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20251218/lib/menu.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/module.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/debug.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/utility.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/validate.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/storage.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/concurrency.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/statistics.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/network.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/danbooru.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/load.js
+// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ Danbooru CryptoJS */
@@ -777,7 +777,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#display-post-info').append(JSPLib.menu.renderMenuFramework(MENU_CONFIG));
-    $("#dpi-general-settings").append(JSPLib.menu.renderDomainSelectors());
     $("#dpi-information-settings").append(JSPLib.menu.renderCheckbox('post_views_enabled'));
     $("#dpi-information-settings").append(JSPLib.menu.renderCheckbox('top_tagger_enabled'));
     $("#dpi-information-settings").append(JSPLib.menu.renderCheckbox('post_favorites_enabled'));
