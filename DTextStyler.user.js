@@ -4,23 +4,26 @@
 // @version      6.0
 // @description  Danbooru DText UI addon.
 // @source       https://danbooru.donmai.us/users/23799
-// @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @author       BrokenEagle (port by CommentaryRequest)
+// @match        *://yukkuri.shiteitte.net/*
+// @exclude      /^https?://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @grant        none
 // @run-at       document-end
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/DTextStyler.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/DTextStyler.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/DTextStyler.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/DTextStyler.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/template.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/menu.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/utility.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/validate.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/storage.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/notice.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/concurrency.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/template.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/network.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/danbooru.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/load.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ Papa */
@@ -1118,7 +1121,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#dtext-styler').append(Menu.renderMenuFramework(MENU_CONFIG));
-    $("#ds-general-settings").append(Menu.renderDomainSelectors());
     $("#ds-main-settings").append(Menu.renderInputSelectors('dtext_types_handled', 'checkbox'));
     $('#ds-commentary-settings').append(Menu.renderCheckbox('post_commentary_enabled'));
     $('#ds-commentary-settings').append(Menu.renderCheckbox('upload_commentary_enabled'));
