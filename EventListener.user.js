@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         EventListener
+// @name         EventListener (OYP)
 // @namespace    https://github.com/BrokenEagle/JavaScripts
 // @version      27.0
 // @description  Informs users of new events.
