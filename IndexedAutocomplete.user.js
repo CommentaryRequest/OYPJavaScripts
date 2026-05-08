@@ -14,9 +14,6 @@
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js
-// @downloadURL  https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
-// @updateURL    https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
 // @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js
 // @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/utility.js
