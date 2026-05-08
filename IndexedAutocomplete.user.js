@@ -1,0 +1,2873 @@
+// ==UserScript==
+// @name         IndexedAutocomplete
+// @namespace    https://github.com/BrokenEagle/JavaScripts
+// @version      30.0
+// @description  Uses Indexed DB for autocomplete, plus caching of other data.
+// @source       https://danbooru.donmai.us/users/23799
+// @author       BrokenEagle
+// @match        https://*.donmai.us/*
+// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @run-at       document-idle
+// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedAutocomplete.user.js
+// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedAutocomplete.user.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js
+// @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/module.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/debug.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/utility.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/validate.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/storage.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/template.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/concurrency.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/statistics.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/network.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/danbooru.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/load.js
+// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/menu.js
+// ==/UserScript==
+
+/* global JSPLib $ jQuery */
+
+(({DanbooruProxy, ValidateJS, Debug, Notice, Utility, Storage, Validate, Template, Statistics, Danbooru, Load, Menu}) => {
+
+const PROGRAM_NAME = 'IndexedAutocomplete';
+const PROGRAM_SHORTCUT = 'iac';
+const DANBOORU_TOPIC_ID = 14701;
+
+/****Library updates****/
+
+////NONE
+
+/****Global variables****/
+
+//Module constants
+
+const IAC = {};
+
+const PROGRAM_RESET_KEYS = {
+    choice_order: {},
+    choice_data: {},
+    source_data: {},
+};
+
+const STORAGE_RESET_KEYS = [
+    'iac-choice-info',
+];
+
+const PROGRAM_DATA_REGEX = /^(ac|pl|us|fg|ss|ar|wp|ft)-/; //Regex that matches the prefix of all program cache data
+const PROGRAM_DATA_KEY = {
+    tag: 'ac',
+    pool: 'pl',
+    user: 'us',
+    artist: 'ar',
+    wiki: 'wp',
+    forum: 'ft',
+    saved_search: 'ss',
+    favorite_group: 'fg',
+};
+
+const LOAD_REQUIRED_VARIABLES = ['window.jQuery', 'window.Danbooru', 'Danbooru.Autocomplete', 'Danbooru.CurrentUser'];
+const LOAD_REQUIRED_SELECTORS = ['#top', '#page'];
+
+//Setting constants
+
+const TAG_SOURCES = ['metatag', 'tag', 'tag-word', 'tag-abbreviation', 'tag-alias', 'tag-correction', 'tag-other-name'];
+
+const SETTINGS_CONFIG = {
+    usage_multiplier: {
+        reset: 0.9,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0, maximum: 1.0}),
+        hint: "Valid values: 0.0 - 1.0."
+    },
+    usage_maximum: {
+        reset: 20,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0}),
+        hint: "Set to 0 for no maximum."
+    },
+    usage_expires: {
+        reset: 2,
+        parse: parseInt,
+        validate: (data) => Menu.validateNumber(data, {integer: true, minimum: 1}),
+        hint: "Number of days."
+    },
+    usage_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Uncheck to turn off usage mechanism."
+    },
+    alternate_sorting_enabled: {
+        reset: false,
+        validate: Utility.isBoolean,
+        hint: "Check to use alternate weights and/or scales for sorting calculations."
+    },
+    postcount_scale: {
+        allitems: ['linear', 'square_root', 'logarithmic'],
+        reset: ['linear'],
+        validate (data) {return Menu.validateCheckboxRadio(data, 'radio', this.allitems);},
+        hint: "Select the type of scaling to be applied to the post count."
+    },
+    exact_source_weight: {
+        reset: 1.0,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0, maximum: 1.0}),
+        hint: "Valid values: 0.0 - 1.0."
+    },
+    prefix_source_weight: {
+        reset: 0.8,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0, maximum: 1.0}),
+        hint: "Valid values: 0.0 - 1.0."
+    },
+    alias_source_weight: {
+        reset: 0.2,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0, maximum: 1.0}),
+        hint: "Valid values: 0.0 - 1.0."
+    },
+    correct_source_weight: {
+        reset: 0.1,
+        parse: parseFloat,
+        validate: (data) => Menu.validateNumber(data, {integer: false, minimum: 0.0, maximum: 1.0}),
+        hint: "Valid values: 0.0 - 1.0."
+    },
+    metatag_source_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Adds metatags to autocomplete results on all post tag search inputs."
+    },
+    BUR_source_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Adds BUR script elements to autocomplete results on bulk update requests, tag aliases, and tag implications."
+    },
+    source_results_returned: {
+        reset: 10,
+        parse: parseInt,
+        validate: (data) => Menu.validateNumber(data, {integer: true, minimum: 5, maximum: 20}),
+        hint: "Number of results to return (5 - 20)."
+    },
+    source_highlight_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Adds highlights and stylings to the HTML classes set by the program."
+    },
+    highlight_words_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Underlines word matches on word match results."
+    },
+    source_grouping_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Groups the results by tag autocomplete sources."
+    },
+    source_order: {
+        allitems: TAG_SOURCES,
+        reset: TAG_SOURCES,
+        sortvalue: true,
+        validate: (data) => Utility.arrayEquals(data, TAG_SOURCES),
+        hint: "Used when source grouping is enabled. Drag and drop the sources to determine the group order."
+    },
+    alternate_tag_source: {
+        reset: false,
+        validate: Utility.isBoolean,
+        hint: "Uses the <code>/tags</code> controller instead of the normal autocomplete source."
+    },
+    alternate_tag_wildcards: {
+        reset: false,
+        validate: Utility.isBoolean,
+        hint: "Adding a wildcard anywhere in the input will cause a wildcard to be added to the end when querying Danbooru."
+    },
+    word_start_matches: {
+        reset: false,
+        validate: Utility.isBoolean,
+        hint: "Always adds a wildcard to the end when querying Danbooru."
+    },
+    network_only_mode: {
+        reset: false,
+        validate: Utility.isBoolean,
+        hint: `Always goes to network. <b><span style="color:red">Warning:</span> This negates the benefit of cached data!</b>`
+    },
+    recheck_data_interval: {
+        reset: 1,
+        parse: parseInt,
+        validate: (data) => Menu.validateNumber(data, {integer: true, minimum: 0, maximum: 3}),
+        hint: "Number of days (0 - 3). Data expiring within this period gets automatically requeried. Setting to 0 disables this."
+    },
+    text_input_autocomplete_enabled: {
+        reset: true,
+        validate: Utility.isBoolean,
+        hint: "Enables autocomplete in non-autocomplete text fields (Alt+A to enable/disable), inserting a wiki link upon completion."
+    },
+};
+
+const CONTROL_CONFIG = {
+    cache_info: {
+        value: "Click to populate",
+        hint: "Calculates the cache usage of the program and compares it to the total usage.",
+    },
+    purge_cache: {
+        display: `Purge cache (<span id="iac-purge-counter">...</span>)`,
+        value: "Click to purge",
+        hint: `Dumps all of the cached data related to ${PROGRAM_NAME}.`,
+    },
+    data_source: {
+        allitems: ['local_storage', 'indexed_db'],
+        value: 'local_storage',
+        hint: "Indexed DB is <b>Cache Data</b> and Local Storage is <b>Program Data</b>.",
+    },
+    data_type: {
+        allitems: ['tag', 'pool', 'user', 'artist', 'wiki', 'forum', 'saved_search', 'favorite_group', 'related_tag', 'custom'],
+        value: 'tag',
+        hint: "Select type of data. Use <b>Custom</b> for querying by keyname.",
+    },
+    related_tag_type: {
+        allitems: ["", 'general', 'copyright', 'character', 'artist'],
+        value: "",
+        hint: "Select type of related tag data. Blank selects uncategorized data.",
+    },
+    raw_data: {
+        value: false,
+        hint: "Select to import/export all program data",
+    },
+    data_name: {
+        value: "",
+        buttons: ['get', 'save', 'delete', 'list', 'refresh'],
+        hint: "Click <b>Get</b> to see the data, <b>Save</b> to edit it, and <b>Delete</b> to remove it.<br><b>List</b> shows keys in their raw format, and <b>Refresh</b> checks the keys again.",
+    },
+};
+
+const MENU_CONFIG = {
+    topic_id: DANBOORU_TOPIC_ID,
+    settings: [{
+        name: 'general',
+    }, {
+        name: 'source',
+    }, {
+        name: 'usage',
+        message: "How items get sorted that are selected by the user.",
+    }, {
+        name: 'display',
+        message: "Affects the presentation of autocomplete data to the user.",
+    }, {
+        name: 'sort',
+        message: "Affects the order of tag autocomplete data.",
+    }, {
+        name: 'network',
+    }],
+    controls: [],
+};
+
+//Pre-CSS/HTML constants
+
+const BUR_TAG_CATEGORY = 400;
+const METATAG_TAG_CATEGORY = 500;
+
+//CSS Constants
+
+const PROGRAM_CSS = Template.normalizeCSS()`
+.iac-line-entry {
+    display: flex;
+    width: 100%;
+    white-space: nowrap;
+    align-items: center;
+}
+.iac-line-entry.ui-menu-item-wrapper.ui-state-active {
+    border: none;
+    a.tag-type-0 {
+        color: var(--general-tag-color);
+    }
+    a.tag-type-1 {
+        color: var(--artist-tag-color);
+    }
+    a.tag-type-3 {
+        color: var(--copyright-tag-color);
+    }
+    a.tag-type-4 {
+        color: var(--character-tag-color);
+    }
+    a.tag-type-5 {
+        color: var(--meta-tag-color);
+    }
+}
+.iac-line-entry a {
+    white-space: normal;
+}
+.iac-query > span:first-of-type,
+.iac-pool > span:first-of-type,
+.iac-favgroup > span:first-of-type,
+.iac-artist > span:first-of-type,
+.iac-forum-topic > span:first-of-type {
+    flex-basis: 90%;
+}
+.iac-query > span:last-of-type,
+.iac-pool > span:last-of-type,
+.iac-favgroup > span:last-of-type,
+.iac-artist > span:last-of-type,
+.iac-forum-topic > span:last-of-type {
+    flex-basis: 10%;
+    text-align: right;
+}
+.iac-wiki-page > span:first-of-type {
+    flex-basis: 85%;
+}
+.iac-wiki-page > span:last-of-type {
+    flex-basis: 15%;
+    text-align: right;
+}
+.iac-user .user-system,
+.iac-pool .pool-category-system,
+.iac-favgroup .favgroup-system,
+.iac-search .search-system {
+    color: var(--text-color);
+}
+.iac-user > span,
+.iac-search > span {
+    flex-basis: 100%;
+}
+.iac-user-choice .autocomplete-item {
+    padding-bottom: 1px;
+    line-height: 150%;
+    display: inline-block;
+}
+.iac-tag-alias a {
+    font-style: italic;
+}
+.iac-tag-highlight > div:before {
+    content: "●";
+    padding-right: 4px;
+    font-weight: bold;
+    font-size: 150%;
+    transform: translateY(-2px);
+}
+}
+.iac-tag-bur > div:before {
+    color: #000;
+}
+.iac-tag-exact > div:before {
+    color: #DDD;
+}
+.iac-tag-word > div:before {
+    color: #888;
+}
+.iac-tag-abbreviation > div:before {
+    color: hotpink;
+}
+.iac-tag-alias > div:before {
+    color: gold;
+}
+.iac-tag-autocorrect > div:before {
+    color: cyan;
+}
+.iac-tag-other-name > div:before {
+    color: orange;
+}
+.iac-tag-bur > div:before {
+    color: #888;
+}
+.iac-tag-highlight .tag-type-${BUR_TAG_CATEGORY} {
+    &:link, &:visited, &:hover {
+        color: #888;
+    }
+}
+.iac-highlight-match {
+    font-weight: bold;
+}
+.related-tags .current-related-tags-columns li {
+    &:before {
+        content: "*";
+        font-family: monospace;
+        font-weight: bold;
+        visibility: hidden;
+        padding-right: 0.2em;
+    }
+    &.selected:before {
+        visibility: visible;
+    }
+}`;
+
+const LIGHT_MODE_CSS = Template.normalizeCSS({theme: 'light'})`
+/****GENERAL****/
+.iac-already-used {
+    background-color: #FFFFAA;
+}
+.iac-user-choice .autocomplete-item {
+    box-shadow: 0px 2px 0px #000;
+}
+.iac-tag-metatag > div:before {
+    color: #000;
+}
+.iac-tag-highlight .tag-type-${METATAG_TAG_CATEGORY} {
+    &:link, &:visited, &:hover {
+        color: #000;
+    }
+}
+.iac-highlight-match {
+    filter: brightness(0.75);
+}
+/****FORUM****/
+.ui-menu-item {
+    .forum-topic-category-0 {
+        color: blue;
+    }
+    .forum-topic-category-1 {
+        color: green;
+    }
+    .forum-topic-category-2 {
+        color: red;
+    }
+}`;
+
+const DARK_MODE_CSS = Template.normalizeCSS({theme: 'dark'})`
+/****GENERAL****/
+.iac-already-used {
+    background-color: #666622;
+}
+.iac-user-choice .autocomplete-item {
+    box-shadow: 0px 2px 0px #DDD;
+}
+.iac-tag-metatag > div:before {
+    color: #FFF;
+}
+.iac-tag-highlight .tag-type-${METATAG_TAG_CATEGORY} {
+    &:link, &:visited, &:hover {
+        color: #FFF;
+    }
+}
+.iac-highlight-match {
+    filter: brightness(1.25);
+}
+/****FORUM****/
+.ui-menu-item {
+    .forum-topic-category-0 {
+        color: var(--blue-3);
+    }
+    .forum-topic-category-1 {
+        color: var(--green-3);
+    }
+    .forum-topic-category-2 {
+        color: var(--red-3);
+    }
+}`;
+
+const MENU_CSS = Template.normalizeCSS()`
+#indexed-autocomplete {
+    .jsplib-settings-grouping:not(#iac-general-settings) .iac-selectors label {
+        width: 150px;
+    }
+    .iac-sortlist li {
+        width: 10em;
+    }
+    .iac-formula {
+        font-family: mono;
+    }
+}`;
+
+//HTML Constants
+
+const TEXT_AUTOCOMPLETE_DETAILS = Template.normalizeHTML()`
+<ul>
+    <li><b>Source (Alt+1):</b>
+        <ul>
+            <li><code>tag</code> - Will search tags.</li>
+            <li><code>wiki</code> - Will search wikis.</li>
+        </ul>
+    </li>
+    <li><b>Mode (Alt+2):</b>
+        <ul>
+            <li><code>tag</code> - Spaces appear as underscores.</li>
+            <li><code>normal</code> - Spaces appear as spaces, uses the entire value.</li>
+            <li><code>pipe</code> - Spaces appear as spaces, places a pipe "|" at the end.
+                <ul>
+                    <li>This will remove a final parentheses value.</li>
+                    <li>E.g. "pokemon_(game)" will appear as "pokemon".</li>
+                </ul>
+            </li>
+            <li><code>custom</code> - Default "insert text" in place for custom text by user.</li>
+        </ul>
+    </li>
+    <li><b>Capitalization (Alt+3):</b>
+        <ul>
+            <li><code>lowercase</code> - All lowercase letters.</li>
+            <li><code>uppercase</code> - All uppercase letters.</li>
+            <li><code>titlecase</code> - Only first letter capitalized.</li>
+            <li><code>propercase</code> - First letter of every word capitalized.</li>
+            <li><code>exceptcase</code> - Propercase except for "a", "an", "of", "the", "is".</li>
+            <li><code>romancase</code> - Exceptcase plus capitalize all letters in Roman numerals.</li>
+        </ul>
+    </li>
+</ul>`;
+
+const USAGE_SETTINGS_DETAILS = Template.normalizeHTML()`
+<h5>Equations</h5>
+<ul>
+    <li><span style="width:5em;display:inline-block"><b>Hit:</b></span><span class="iac-formula">usage_count = Min( usage_count + 1 , usage_maximum )</span></li>
+    <li><span style="width:5em;display:inline-block"><b>Miss:</b></span><span class="iac-formula">usage_count = usage_count * usage_multiplier</span></li>
+</ul>`;
+
+const DISPLAY_SETTINGS_DETAILS = Template.normalizeHTML()`
+<ul>
+    <li><b>Source highlight enabled:</b> The following are the CSS classes and default styling.
+        <ul>
+            <li><code>.iac-user-choice</code> - bold text</li>
+            <li><code>.iac-tag-exact</code> - light grey dot</li>
+            <li><code>.iac-tag-word</code> - dark grey dot</li>
+            <li><code>.iac-tag-abbreviation</code> - pink dot</li>
+            <li><code>.iac-tag-alias</code> - gold dot, italic text</li>
+            <li><code>.iac-tag-other-name</code> - orange dot</li>
+            <li><code>.iac-tag-autocorrect</code> - cyan dot</li>
+        </ul>
+    </li>
+    <li><b>Source highlight enabled:</b> Class and default style: <code>.iac-word-match</code> - underline</li>
+    <li><b>Source grouping enabled:</b>
+        <ul>
+            <li>When not enabled, the default is to order using the post count and a weighting scheme.</li>
+            <li><code>sort_value = post_count x weight_value</code></li>
+            <li>The different weights are: (Exact: 1.0), (Prefix: 0.8), (Alias: 0.2), (Correct: 0.1).</li>
+        </ul>
+    </li>
+    <li><b>Source order:</b>
+        <ul>
+            <li><b>Exact:</b> Matches exactly letter for letter.</li>
+            <li><b>Prefix:</b> Matches the first letter of each word.</li>
+            <li><b>Alias:</b> Same as exact, but it checks aliases.</li>
+            <li><b>Correct:</b> Tags off by 1-3 letters, i.e. mispellings.</li>
+        </ul>
+    </li>
+</ul>`;
+
+const SORT_SETTINGS_DETAILS = Template.normalizeHTML()`
+<ul>
+    <li>Alternate sorting must be enabled to use the alternate scales/weights.</li>
+    <li>These settings won't affect anything if source grouping is enabled.</li>
+</ul>
+<h5>Equations</h5>
+<ul>
+    <li><span style="width:8em;display:inline-block"><b>Linear:</b></span><span class="iac-formula">tag_weight = source_weight x post_count</span></li>
+    <li><span style="width:8em;display:inline-block"><b>Square root:</b></span><span class="iac-formula">tag_weight = source_weight x Sqrt( post_count )</span></li>
+    <li><span style="width:8em;display:inline-block"><b>Logarithmic:</b></span><span class="iac-formula">tag_weight = source_weight x Log( post_count )</span></li>
+</ul>`;
+
+const NETWORK_SETTINGS_DETAILS = Template.normalizeHTML()`
+<ul>
+    <li><b>Alternate tag source:</b> No tag correct or tag prefix matches.</li>
+    <li><b>Network only mode:</b>
+        <ul>
+            <li>Can be used to correct cache data that has been changed on the server.</li>
+            <li><span style="color:red;font-weight:bold">Warning!</span> <span style="font-style:italic">As this negates the benefits of using local cached data, it should only be used sparingly.</span></li>
+        </ul>
+    </li>
+</ul>`;
+
+const CACHE_DATA_DETAILS = Template.normalizeHTML()`
+<ul>
+    <li><b>Autocomplete data:</b> Data from every combination of keys in the text input.
+        <ul style="font-size:80%">
+            <li>tags (ac)</li>
+            <li>pools (pl)</li>
+            <li>users (us)</li>
+            <li>favorite groups (fg)</li>
+            <li>saved searches (ss)</li>
+            <li>wiki pages (wp)</li>
+            <li>artists (ar)</li>
+            <li>forum topics (ft)</li>
+        </ul>
+    </li>
+</ul>`;
+
+const PROGRAM_DATA_DETAILS = Template.normalizeHTML()`
+<p class="tn">All timestamps are in milliseconds since the epoch (<a href="https://www.epochconverter.com">Epoch converter</a>).</p>
+<ul>
+    <li><u>General data</u>
+        <ul>
+            <li><b>prune-expires:</b> When the program will next check for cache data that has expired.</li>
+            <li><b>user-settings:</b> All configurable settings.</li>
+        </ul>
+    </li>
+    <li><u>Text autocomplete data</u>
+        <ul>
+            <li><b>ac-source:</b> Numerical value designating the current source.</li>
+            <li><b>ac-mode:</b> Numerical value designating the current mode.</li>
+            <li><b>ac-caps:</b> Numerical value designating the current capitalization.</li>
+        </ul>
+    </li>
+    <li><u>Usage data</u>
+        <ul>
+            <li><b>choice-info:</b> Comprised of choice order and choice data
+                <ul>
+                    <li><b>choice_order:</b> The search terms per source ordered by last use.
+                        <ul>
+                            <li>The order in this list only affects things when the usage counts of two terms are equal.</li>
+                        </ul>
+                    </li>
+                    <li><b>choice_data:</b> The search terms per source with the autocomplete data.
+                        <ul>
+                            <li>The <b>use_count</b> affects how terms get sorted against each other.</li>
+                            <li>The <b>expiration</b> affects when data gets pruned, and gets renewed each time a term is selected.</li>
+                        </ul>
+                    </li>
+                </ul>
+            </li>
+        </ul>
+    </li>
+</ul>`;
+
+const AUTOCOMPLETE_MESSAGE = Template.normalizeHTML()`
+<b>Autocomplete turned on!</b>
+<hr>
+<table>
+    <tbody>
+        <tr>
+            <td style="text-align:right;font-weight:bold">Source:&emsp;</td><td>%s</td>
+        </tr>
+        <tr>
+            <td style="text-align:right;font-weight:bold">Mode:&emsp;</td><td>%s</td>
+        </tr>
+            <td style="text-align:right;font-weight:bold">Capitalization:&emsp;</td><td>%s</td>
+        </tr>
+   </tbody>
+</table>`;
+
+const POOL_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-pool">
+    <span>
+        <a class="pool-category-${'category'} autocomplete-item">${'label'}</a>
+    </span>
+    <span class="post-count">${'post_count'}</span>
+</div>`;
+
+const USER_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-user">
+    <span>
+        <a class="user-${'level'} autocomplete-item">${'label'}</a>
+    </span>
+</div>`;
+
+const FAVGROUP_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-favgroup">
+    <span>
+        <a class="favgroup-${'category'} autocomplete-item">${'label'}</a>
+    </span>
+    <span class="post-count" style="flex-basis: 10%; text-align: right">${'post_count'}</span>
+</div>`;
+
+const SEARCH_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-search">
+    <span>
+        <a class="search-${'category'} autocomplete-item">${'label'}</a>
+    </span>
+</div>`;
+
+const WIKIPAGE_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-wiki-page">
+    <span>
+        <a class="tag-type-${'category'} autocomplete-item">${'label'}</a>
+    </span>
+    <span class="post-count">${'count'}</span>
+</div>`;
+
+const ARTIST_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-artist">
+    <span>
+        <a class="tag-type-1 autocomplete-item">${'label'}</a>
+    </span>
+    <span class="post-count">${'count'}</span>
+</div>`;
+
+const FORUMTOPIC_TEMPLATE = Template.normalizeHTML({template: true})`
+<div class="iac-line-entry iac-forum-topic">
+    <span>
+        <a class="forum-topic-category-${'category'} autocomplete-item">${'label'}</a>
+    </span>
+    <span class="response-count">${'response_count'}</span>
+</div>`;
+
+const LINE_ITEM_TEMPLATE = Template.normalizeHTML({template: true})`
+<span class="iac-tag-info">
+    <a href="${'url'}" class="${'link_classes'}">${'tag_html'}</a>
+</span>
+<span class="post-count">${'post_text'}</span>`;
+
+const LIST_ITEM_TEMPLATE = Template.normalizeHTML({template: true})`
+<li ${'data_items'}>
+    <div class="iac-line-entry iac-query">${'line_item'}</div>
+</li>`;
+
+//Autocomplete constants
+
+const AUTOCOMPLETE_SOURCE = ['tag', 'wiki'];
+const AUTOCOMPLETE_MODE = ['tag', 'normal', 'pipe', 'custom'];
+const AUTOCOMPLETE_CAPITALIZATION = ['lowercase', 'uppercase', 'titlecase', 'propercase', 'exceptcase', 'romancase'];
+
+//Danbooru constants
+
+const COUNT_METATAGS = [
+    'comment_count', 'deleted_comment_count', 'active_comment_count',
+    'note_count', 'deleted_note_count', 'active_note_count',
+    'flag_count',
+    'child_count', 'deleted_child_count', 'active_child_count',
+    'pool_count', 'deleted_pool_count', 'active_pool_count', 'series_pool_count', 'collection_pool_count',
+    'appeal_count', 'approval_count', 'replacement_count',
+];
+
+const COUNT_METATAG_SYNONYMS = COUNT_METATAGS.map((metatag) => {
+    metatag = metatag.replace(/_count/, "");
+    if (metatag.match(/child$/)) {
+        metatag = metatag.replace(/child$/, 'children');
+    } else {
+        metatag += 's';
+    }
+    return metatag;
+});
+
+const CATEGORY_COUNT_METATAGS = ['gentags', 'arttags', 'copytags', 'chartags', 'metatags'];
+
+const ORDER_METATAGS = Utility.multiConcat([
+    'id', 'id_desc',
+    'md5', 'md5_asc',
+    'score', 'score_asc',
+    'upvotes', 'upvotes_asc',
+    'downvotes', 'downvotes_asc',
+    'favcount', 'favcount_asc',
+    'created_at', 'created_at_asc',
+    'change', 'change_asc',
+    'comment', 'comment_asc',
+    'comment_bumped', 'comment_bumped_asc',
+    'note', 'note_asc',
+    'artcomm', 'artcomm_asc',
+    'mpixels', 'mpixels_asc',
+    'portrait', 'landscape',
+    'filesize', 'filesize_asc',
+    'tagcount', 'tagcount_asc',
+    'duration', 'duration_asc',
+    'rank',
+    'curated',
+    'modqueue',
+    'random',
+    'custom',
+    'none',
+], COUNT_METATAGS,
+COUNT_METATAG_SYNONYMS.flatMap((metatag) => [metatag, metatag + '_asc']),
+CATEGORY_COUNT_METATAGS.flatMap((metatag) => [metatag, metatag + '_asc'])
+);
+
+const POST_STATUSES = ['active', 'deleted', 'pending', 'flagged', 'appealed', 'banned', 'modqueue', 'unmoderated'];
+const POST_RATINGS = ['general', 'sensitive', 'questionable', 'explicit'];
+const FILE_TYPES = ['jpg', 'png', 'gif', 'webp', 'avif', 'mp4', 'webm', 'swf', 'zip'];
+const DISAPPROVAL_REASONS = ['breaks_rules', 'poor_quality', 'disinterest'];
+
+const QUERY_METATAGS_MAP = {
+    is: Utility.multiConcat(['parent', 'child', 'sfw', 'nsfw'], POST_STATUSES, FILE_TYPES, POST_RATINGS),
+    has: ['parent', 'children', 'source', 'appeals', 'flags', 'replacements', 'comments', 'commentary', 'notes', 'pools'],
+    status: Utility.concat(['any', 'all'], POST_STATUSES),
+    child: Utility.concat(['any', 'none'], POST_STATUSES),
+    parent: Utility.concat(['any', 'none'], POST_STATUSES),
+    rating: POST_RATINGS,
+    source: ['none', 'http'],
+    embedded: ['true', 'false'],
+    filetype: FILE_TYPES,
+    commentary: ['all', 'none', 'true', 'false', 'translated', 'untranslated'],
+    disapproved: DISAPPROVAL_REASONS,
+    order: ORDER_METATAGS,
+};
+
+const QUERY_STATIC_METATAGS = Object.keys(QUERY_METATAGS_MAP);
+
+const USER_METATAGS = [
+    'user', 'approver', 'commenter', 'comm', 'noter', 'noteupdater', 'artcomm', 'commentaryupdater',
+    'flagger', 'appealer', 'upvote', 'downvote', 'fav', 'ordfav'
+];
+
+const POOL_METATAGS = [
+    'pool', 'ordpool'
+];
+
+const FAVGROUP_METATAGS = [
+    'favgroup', 'ordfavgroup'
+];
+
+const SAVED_SEARCH_METATAGS = [
+    'search'
+];
+
+const QUERY_METATAGS = Utility.multiConcat([
+    'note', 'comment', 'id', 'source', 'md5', 'width', 'height', 'mpixels', 'ratio', 'score', 'upvotes',
+    'downvotes', 'favcount', 'filesize', 'date', 'age', 'limit', 'tagcount', 'pixiv_id', 'pixiv',
+    'unaliased', 'exif', 'duration', 'random', 'ai',
+], QUERY_STATIC_METATAGS, USER_METATAGS, POOL_METATAGS, FAVGROUP_METATAGS, SAVED_SEARCH_METATAGS, COUNT_METATAGS, COUNT_METATAG_SYNONYMS, CATEGORY_COUNT_METATAGS).toSorted();
+
+const QUERY_METATAG_REGEXES = {
+    static: RegExp('^(?:' + QUERY_STATIC_METATAGS.join('|') + ')$'),
+    user: RegExp('^(?:' + USER_METATAGS.join('|') + ')$'),
+    pool: RegExp('^(?:' + POOL_METATAGS.join('|') + ')$'),
+    favgroup: RegExp('^(?:' + FAVGROUP_METATAGS.join('|') + ')$'),
+    search: RegExp('^(?:' + SAVED_SEARCH_METATAGS.join('|') + ')$'),
+    tag: /^tag$/,
+};
+
+const CATEGORY_NAMES = ['meta', 'general', 'character', 'copyright', 'artist'];
+const CATEGORIZATION_METATAGS = Utility.concat(['ch', 'co', 'gen', 'char', 'copy', 'art'], CATEGORY_NAMES);
+
+const EDIT_METATAGS_MAP = {
+    status: ['active', 'banned', 'pending'],
+    child: ['none'],
+    parent: ['none'],
+    rating: POST_RATINGS,
+    source: ['none'],
+    upvote: ['self'],
+    downvote: ['self'],
+    fav: ['self'],
+    disapproved: DISAPPROVAL_REASONS,
+};
+
+const EDIT_STATIC_METATAGS = Object.keys(EDIT_METATAGS_MAP);
+
+const EDIT_METATAGS = Utility.multiConcat([
+    'newpool', 'pool', 'favgroup',
+], EDIT_STATIC_METATAGS, CATEGORIZATION_METATAGS).toSorted();
+
+const EDIT_METATAG_REGEXES = Utility.assignObjects({}, QUERY_METATAG_REGEXES, {
+    static: RegExp('^(?:' + EDIT_STATIC_METATAGS.join('|') + ')$'),
+    user: RegExp('^(?:' + Utility.arrayDifference(USER_METATAGS, ['upvote', 'downvote', 'fav']).join('|') + ')$')
+}) ;
+
+const CATEGORY_DATA = CATEGORY_NAMES.map((category) => ({
+    type: 'tag',
+    label: category,
+    name: category,
+    post_count: 'N/A',
+    source: 'category',
+    category: BUR_TAG_CATEGORY,
+    key: null,
+}));
+
+const USER_OPTION_METATAGS = [
+    'flagger', 'appealer', 'commenter', 'comm', 'commentaryupdater', 'artcomm', 'noter',
+    'noteupdater', 'upvoter', 'upvote', 'downvoter', 'downvote', 'approver', 'user'
+];
+
+const FAVGROUP_OPTION_METATAGS = [
+    'favgroup'
+];
+
+const POOL_OPTION_METATAGS = [
+    'pool'
+];
+
+const SAVED_SEARCH_OPTION_METATAGS = [
+    'search'
+];
+
+const ALL_OPTION_METATAGS = Utility.multiConcat(
+    USER_OPTION_METATAGS,
+    FAVGROUP_OPTION_METATAGS,
+    POOL_OPTION_METATAGS,
+    SAVED_SEARCH_OPTION_METATAGS
+);
+
+//Regex constants
+
+const TERM_REGEX = RegExp('([-~]*)(?:(' + Utility.concat(QUERY_METATAGS, CATEGORIZATION_METATAGS).join('|') + '):)?(\\S*)$', 'i');
+const CATEGORY_REGEX = RegExp('^[-~]*(?:' + CATEGORIZATION_METATAGS.join('|') + '):$', 'i');
+
+const WORD_DELIMITERS = '_+:;!./()-';
+const DELIMITER_GROUP = `[${WORD_DELIMITERS}]`;
+const DELIMITER_NOT_GROUP = `[^${WORD_DELIMITERS}]`;
+const DELIMITER_LOOKBEHIND = `(?<=^|${DELIMITER_GROUP})`;
+const DELIMITER_GROUP_RG = new RegExp(DELIMITER_GROUP);
+const ALL_DELIMTER_RG = new RegExp(DELIMITER_GROUP + '|' + DELIMITER_NOT_GROUP + '+', 'g');
+
+//BUR constants
+const BUR_KEYWORDS = ['alias', 'unalias', 'imply', 'unimply', 'rename', 'update', 'deprecate', 'undeprecate', 'nuke', 'category', 'convert'];
+const BUR_DATA = BUR_KEYWORDS.map((tag) => ({
+    type: 'tag',
+    label: tag,
+    name: tag,
+    post_count: 'BUR',
+    source: 'bur',
+    category: BUR_TAG_CATEGORY,
+    key: null,
+}));
+const BUR_LIMITS = {
+    alias: 4,
+    unalias: 4,
+    imply: 4,
+    unimply: 4,
+    rename: 4,
+    deprecate: 2,
+    undeprecate: 2,
+    nuke: 2,
+    category: 4,
+    convert: 4,
+};
+
+//Time constants
+const PRUNE_EXPIRES = Utility.one_day;
+const JQUERY_DELAY = 500; //Delay for calling functions after initialization
+const TIMER_POLL_INTERVAL = 100; //Polling interval for checking program status
+
+//Data inclusion lists
+const ALL_CATEGORIES = [0, 1, 3, 4, 5];
+const ALL_TOPICS = [0, 1, 2];
+const ALL_POOLS = ['system', 'collection', 'series'];
+const ALL_USERS = ['system', 'Member', 'Gold', 'Platinum', 'Builder', 'Contributor', 'Approver', 'Moderator', 'Admin', 'Owner'];
+
+//All of the following are used to determine when to run the script
+const AUTOCOMPLETE_USERLIST = [
+    '[data-autocomplete=user]',
+];
+//DOM elements with autocomplete
+const AUTOCOMPLETE_DOMLIST = [
+    '#search_topic_title_matches',
+    '#bulk_update_request_script',
+    '[data-autocomplete=tag]',
+    '[data-autocomplete=wiki-page]',
+    '[data-autocomplete=artist]',
+    '[data-autocomplete=pool]',
+    '[data-autocomplete=saved-search-label]',
+    '[data-autocomplete=forum-topic]',
+    '[data-autocomplete=user]',
+    '[data-autocomplete=tag-query]',
+    '[data-autocomplete=tag-edit]',
+    '.autocomplete-mentions textarea',
+];
+
+const AUTOCOMPLETE_ALL_SELECTORS = AUTOCOMPLETE_DOMLIST.join(',');
+const AUTOCOMPLETE_USER_SELECTORS = AUTOCOMPLETE_USERLIST.join(',');
+const AUTOCOMPLETE_MULTITAG_SELECTORS = ['tag-query', 'tag-edit'].map((ac_type) => ['nav', 'page'].map((id_select) => `#${id_select} [data-autocomplete=${ac_type}]`).join(', ')).join(', ');
+
+//String constants
+
+const WORDBREAK_REGEX = /\(+|\)+|[\s_]+|[^\s_()]+/g;
+const ROMAN_REGEX = /^M?M?M?(CM|CD|D?C?C?C?)(XC|XL|L?X?X?X?)(IX|IV|V?I?I?I?)$/i;
+
+const NONTITLEIZE_WORDS = ['a', 'an', 'of', 'the', 'is'];
+
+//Expiration variables
+
+const EXPIRATION_CONFIG = {
+    tag: {
+        logarithmic_start: 100,
+        minimum: Utility.one_week,
+        maximum: Utility.one_month,
+    },
+    pool: {
+        logarithmic_start: 10,
+        minimum: Utility.one_week,
+        maximum: Utility.one_month,
+    },
+    user: {
+        minimum: Utility.one_month,
+    },
+    favgroup: {
+        minimum: Utility.one_week,
+    },
+    search: {
+        minimum: Utility.one_week,
+    },
+    wikipage: {
+        logarithmic_start: 100,
+        minimum: Utility.one_week,
+        maximum: Utility.one_month,
+    },
+    artist: {
+        logarithmic_start: 10,
+        minimum: Utility.one_week,
+        maximum: Utility.one_month,
+    },
+    forumtopic: {
+        minimum: Utility.one_week,
+    },
+};
+
+//Source variables
+
+const SOURCE_KEY = {
+    ac: 'tag',
+    pl: 'pool',
+    us: 'user',
+    fg: 'favgroup',
+    ss: 'search',
+    ar: 'artist',
+    wp: 'wikipage',
+    ft: 'forumtopic'
+};
+
+const SOURCE_CONFIG = {
+    tag1: {
+        url: 'autocomplete',
+        invalid: (term) => ParseQuery(term, term.length).prefix.length > 0,
+        data: (term, query_type) => {
+            let type = query_type === 'tag' ? 'tag' : 'tag_query';
+            return {
+                search: {
+                    type,
+                    query: term,
+                }
+            };
+        },
+        map: (tag) => (
+            {
+                antecedent: tag.antecedent ?? null,
+                name: tag.value,
+                category: tag.category,
+                post_count: tag.post_count,
+                source: tag.type,
+            }
+        ),
+        expiration: (d) => (d.length ? ExpirationTime('tag', d[0].post_count) : MinimumExpirationTime('tag')),
+        search_start: true,
+        spaces_allowed: false
+    },
+    tag2: {
+        url: 'tags',
+        invalid: (term) => ParseQuery(term, term.length).prefix.length > 0,
+        data: (term) => (
+            {
+                search: {
+                    name_or_alias_matches: term,
+                    hide_empty: true,
+                    order: 'count',
+                },
+                only: 'name,category,post_count,consequent_aliases[antecedent_name]',
+            }
+        ),
+        map: (tag, term) =>
+            Utility.assignObjects({
+                name: tag.name,
+                category: tag.category,
+                post_count: tag.post_count,
+            }, GetConsequentMatch(term, tag))
+        ,
+        expiration: (d) => (d.length ? ExpirationTime('tag', d[0].post_count) : MinimumExpirationTime('tag')),
+        search_start: true,
+        spaces_allowed: false
+    },
+    metatag: {},
+    pool: {
+        url: 'pools',
+        data: (term) => ({
+            search: {
+                order: 'post_count',
+                name_matches: term
+            },
+            only: 'name,category,post_count'
+        }),
+        map: (pool) => ({
+            name: pool.name,
+            post_count: pool.post_count,
+            category: pool.category
+        }),
+        expiration: (d) => (d.length ? ExpirationTime('pool', d[0].post_count) : MinimumExpirationTime('pool')),
+        search_start: false,
+        spaces_allowed: true,
+        render: (_domobj, item) => {
+            let merge = Utility.mergeObjects(item, {
+                post_count: (['any', 'none', 'collection', 'series'].includes(item.name) ? 'N/A' : item.post_count),
+            });
+            return $(POOL_TEMPLATE(merge));
+        },
+    },
+    user: {
+        url: 'users',
+        data: (term) => ({
+            search: {
+                order: 'post_upload_count',
+                current_user_first: true,
+                name_matches: term,
+            },
+            only: 'name,level_string'
+        }),
+        map: (user) => ({
+            name: user.name,
+            level: user.level_string
+        }),
+        expiration: () => MinimumExpirationTime('user'),
+        search_start: true,
+        spaces_allowed: false,
+        render: (_domobj, item) => $(USER_TEMPLATE({level: item.level.toLowerCase(), label: item.label})),
+    },
+    favgroup: {
+        url: 'favorite_groups',
+        data: (term) => ({
+            search: {
+                order: 'post_count',
+                name_matches: term,
+                creator_id: IAC.user_id,
+            },
+            only: 'name,post_ids'
+        }),
+        map: (favgroup) => ({
+            name: favgroup.name,
+            post_count: favgroup.post_ids.length,
+            category: 'danbooru',
+        }),
+        expiration: () => MinimumExpirationTime('favgroup'),
+        search_start: false,
+        spaces_allowed: true,
+        render: (_domobj, item) => {
+            let merge = Utility.mergeObjects(item, {
+                post_count: (item.category === 'system' ? 'N/A' : item.post_count),
+            });
+            return $(FAVGROUP_TEMPLATE(merge));
+        },
+    },
+    search: {
+        url: 'autocomplete',
+        data: (term) => ({
+            search: {
+                type: 'saved_search_label',
+                query: term,
+            }
+        }),
+        map: (label) => ({
+            name: label.value,
+            category: 'danbooru',
+        }),
+        expiration: () => MinimumExpirationTime('search'),
+        search_start: true,
+        spaces_allowed: false,
+        render: (_domobj, item) => $(SEARCH_TEMPLATE(item)),
+    },
+    wikipage: {
+        url: 'wiki_pages',
+        data: (term) => ({
+            search: {
+                order: 'post_count',
+                hide_deleted: true,
+                title_ilike: term.replace(/ /g, '_'),
+            },
+            only: 'title,tag[category,post_count]'
+        }),
+        map: (wikipage) => ({
+            name: wikipage.title,
+            category: wikipage.tag?.category || 0,
+            post_count: wikipage.tag?.post_count || 0,
+            no_tag: !wikipage.tag,
+        }),
+        expiration: (d) => (d.length && d[0].tag ? ExpirationTime('wikipage', d[0].tag.post_count) : MinimumExpirationTime('wikipage')),
+        search_start: true,
+        spaces_allowed: true,
+        render: (_domobj, item) => {
+            let count = (item.no_tag ? 'No tag' : item.post_count);
+            return $(WIKIPAGE_TEMPLATE(Utility.assignObjects({count}, item)));
+        },
+    },
+    artist: {
+        url: 'artists',
+        data: (term) => ({
+            search: {
+                order: 'post_count',
+                is_active: true,
+                name_like: term.trim().replace(/\s+/g, '_')
+            },
+            only: 'name,tag[post_count]'
+        }),
+        map: (artist) => ({
+            post_count: artist.tag?.post_count,
+            name: artist.name,
+            no_tag: !artist.tag,
+        }),
+        expiration: (d) => (d.length && d[0].tag ? ExpirationTime('artist', d[0].tag.post_count) : MinimumExpirationTime('artist')),
+        search_start: true,
+        spaces_allowed: false,
+        render: (_domobj, item) => {
+            let count = (item.no_tag ? 'No tag' : item.post_count);
+            return $(ARTIST_TEMPLATE({label: item.label, count}));
+        },
+    },
+    forumtopic: {
+        url: 'forum_topics',
+        data: (term) => ({
+            search: {
+                order: 'sticky',
+                title_ilike: term,
+            },
+            only: 'title,category_id,response_count'
+        }),
+        map: (forumtopic) => ({
+            response_count: forumtopic.response_count,
+            category: forumtopic.category_id,
+            name: forumtopic.title,
+        }),
+        expiration: () => MinimumExpirationTime('forumtopic'),
+        search_start: false,
+        spaces_allowed: true,
+        render: (_domobj, item) => $(FORUMTOPIC_TEMPLATE(item)),
+    }
+};
+
+//Validate constants
+
+const AUTOCOMPLETE_CONSTRAINTS = {
+    entry: Validate.arrayentry_constraints({maximum: 20}),
+    tag: {
+        antecedent: Validate.stringnull_constraints,
+        category: Validate.inclusion_constraints(ALL_CATEGORIES.concat(METATAG_TAG_CATEGORY)),
+        post_count: Validate.postcount_constraints,
+        name: Validate.stringonly_constraints,
+        source: Validate.inclusion_constraints(TAG_SOURCES),
+    },
+    get metatag() {
+        return this.tag;
+    },
+    pool: {
+        category: Validate.inclusion_constraints(ALL_POOLS),
+        post_count: Validate.nonnegative_integer_constraints,
+        name: Validate.stringonly_constraints,
+    },
+    user: {
+        level: Validate.inclusion_constraints(ALL_USERS),
+        name: Validate.stringonly_constraints,
+    },
+    favgroup: {
+        post_count: Validate.nonnegative_integer_constraints,
+        name: Validate.stringonly_constraints,
+        category: Validate.inclusion_constraints(['system', 'danbooru']),
+    },
+    search: {
+        name: Validate.stringonly_constraints,
+        category: Validate.inclusion_constraints(['system', 'danbooru']),
+    },
+    artist: {
+        post_count: Validate.nonnegative_integer_constraints,
+        name: Validate.stringonly_constraints,
+        no_tag: Validate.boolean_constraints,
+    },
+    wikipage: {
+        post_count: Validate.nonnegative_integer_constraints,
+        name: Validate.stringonly_constraints,
+        category: Validate.inclusion_constraints(ALL_CATEGORIES),
+        no_tag: Validate.boolean_constraints,
+    },
+    forumtopic: {
+        response_count: Validate.nonnegative_integer_constraints,
+        name: Validate.stringonly_constraints,
+        category: Validate.inclusion_constraints(ALL_TOPICS),
+    },
+};
+
+const USAGE_CONSTRAINTS = {
+    expires: Validate.nonnegative_integer_constraints,
+    use_count: {
+        numericality: {
+            greaterThanOrEqualTo: 0,
+        },
+    },
+};
+
+/****Functions****/
+
+//Validate functions
+
+function ValidateEntry(key, entry) {
+    const printer = Debug.getFunctionPrint('ValidateEntry');
+    if (!Validate.validateIsHash(key, entry)) {
+        return false;
+    }
+    if (key.match(/^(?:ac|pl|us|fg|ss|ar|wp|ft)-/)) {
+        return ValidateAutocompleteEntry(key, entry);
+    }
+    printer.log("Bad key!");
+    return false;
+}
+
+function ValidateAutocompleteEntry(key, entry) {
+    if (!Validate.validateHashEntries(key, entry, AUTOCOMPLETE_CONSTRAINTS.entry)) {
+        return false;
+    }
+    let type = SOURCE_KEY[key.slice(0, 2)];
+    for (let i = 0; i < entry.value.length; i++) {
+        if (!Validate.validateHashEntries(`${key}.value[${i}]`, entry.value[i], AUTOCOMPLETE_CONSTRAINTS[type])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function ValidateProgramData(key, entry) {
+    var checkerror = [];
+    switch (key) {
+        case 'iac-user-settings':
+            checkerror = Load.validateUserSettings(entry, SETTINGS_CONFIG);
+            break;
+        case 'iac-prune-expires':
+            if (!Utility.isInteger(entry)) {
+                checkerror = ["Value is not an integer."];
+            }
+            break;
+        case 'iac-choice-info':
+            if (Utility.isHash(entry)) {
+                checkerror = ValidateUsageData(entry);
+            } else {
+                checkerror = ['Value is not a hash'];
+            }
+            break;
+        case 'iac-ac-source':
+            if (!Utility.isInteger(entry) || entry > AUTOCOMPLETE_SOURCE.length || entry < 0) {
+                checkerror = [`Value is not an integer between 0 and {AUTOCOMPLETE_SOURCE.length - 1}.`];
+            }
+            break;
+        case 'iac-ac-mode':
+            if (!Utility.isInteger(entry) || entry > AUTOCOMPLETE_MODE.length || entry < 0) {
+                checkerror = [`Value is not an integer between 0 and {AUTOCOMPLETE_MODE.length - 1}.`];
+            }
+            break;
+        case 'iac-ac-caps':
+            if (!Utility.isInteger(entry) || entry > AUTOCOMPLETE_CAPITALIZATION.length || entry < 0) {
+                checkerror = [`Value is not an integer between 0 and {AUTOCOMPLETE_CAPITALIZATION.length - 1}.`];
+            }
+            break;
+        default:
+            checkerror = ["Not a valid program data key."];
+    }
+    if (checkerror.length) {
+        Validate.outputValidateError(key, checkerror);
+        return false;
+    }
+    return true;
+}
+
+//Scalpel validation... removes only data that is bad instead of tossing everything
+function ValidateUsageData(choice_info) {
+    let error_messages = [];
+    let choice_order = choice_info.choice_order;
+    let choice_data = choice_info.choice_data;
+    if (!Utility.isHash(choice_order) || !Utility.isHash(choice_data)) {
+        error_messages.push("Choice data/order is not a hash.");
+        choice_info.choice_order = {};
+        choice_info.choice_data = {};
+        return error_messages;
+    }
+    //Validate choice order
+    for (let type in choice_order) {
+        if (!Utility.isArray(choice_order[type])) {
+            error_messages.push(`choice_order[${type}] is not an array.`);
+            delete choice_order[type];
+            continue;
+        }
+        for (let i = 0; i < choice_order[type].length; i++) {
+            if (!Utility.isString(choice_order[type][i])) {
+                error_messages.push(`choice_order[${type}][${i}] is not a string`);
+                choice_order[type].splice(i, 1);
+                i--;
+            }
+        }
+    }
+    //Validate choice data
+    for (let type in choice_data) {
+        if (!Utility.isHash(choice_data[type])) {
+            error_messages.push(`choice_data[${type}] is not a hash`);
+            delete choice_data[type];
+            continue;
+        }
+        for (let key in choice_data[type]) {
+            let validator = Utility.mergeObjects(AUTOCOMPLETE_CONSTRAINTS[type], USAGE_CONSTRAINTS);
+            let check = ValidateJS(choice_data[type][key], validator);
+            if (check !== undefined) {
+                error_messages.push(`choice_data[${type}][${key}]`, check);
+                delete choice_data[type][key];
+                continue;
+            }
+            let extra_keys = Utility.arrayDifference(Object.keys(choice_data[type][key]), Object.keys(validator));
+            if (extra_keys.length) {
+                error_messages.push(`Hash contains extra keys: ${type} - ${key}`, extra_keys);
+                delete choice_data[type][key];
+            }
+        }
+    }
+    //Validate same types between both
+    let type_diff = Utility.arraySymmetricDifference(Object.keys(choice_order), Object.keys(choice_data));
+    if (type_diff.length) {
+        error_messages.push("Type difference between choice order and choice data:", type_diff);
+        type_diff.forEach((type) => {
+            delete choice_order[type];
+            delete choice_data[type];
+        });
+    }
+    //Validate same keys between both
+    for (let type in choice_order) {
+        let key_diff = Utility.arraySymmetricDifference(choice_order[type], Object.keys(choice_data[type]));
+        if (key_diff.length) {
+            error_messages.push("Key difference between choice order and choice data:", type, key_diff);
+            key_diff.forEach((key) => {
+                choice_order[type] = Utility.arrayDifference(choice_order[type], [key]);
+                delete choice_data[type][key];
+            });
+        }
+    }
+    return error_messages;
+}
+
+function ValidateCached(cached, type, term, word_mode) {
+    if (!cached) return false;
+    if (type !== 'tag') return true;
+    if (word_mode) {
+        return cached.value.every((item) => GetWordMatches(item.antecedent || item.name, term, false));
+    }
+    return cached.value.every((item) => GetGlobMatches(item.antecedent || item.name, term, false));
+}
+
+//Helper functions
+
+function GetJqueryObj(selector) {
+    if (typeof selector === 'string' || selector instanceof HTMLBodyElement) {
+        return jQuery(selector);
+    }
+    if (selector instanceof jQuery) {
+        return selector;
+    }
+    throw new Error("Bad selector.");
+}
+
+function TitleizeExcept(word) {
+    return (NONTITLEIZE_WORDS.includes(word) ? word : Utility.titleize(word));
+}
+
+function TitleizeRoman(word) {
+    return (word.match(ROMAN_REGEX) ? word.toUpperCase() : TitleizeExcept(word));
+}
+
+function ProperCase(string) {
+    return string.match(WORDBREAK_REGEX).map((word) => Utility.titleize(word)).join("");
+}
+
+function ExceptCase(string) {
+    return string.match(WORDBREAK_REGEX).map((word) => TitleizeExcept(word)).join("");
+}
+
+function RomanCase(string) {
+    return string.match(WORDBREAK_REGEX).map((word) => TitleizeRoman(word)).join("");
+}
+
+function GetQueryType(element) {
+    if (['post_tag_string', 'tag-script-field'].includes(element.id)) {
+        return 'tag-edit';
+    }
+    let query_type = $(element).data('autocomplete');
+    return (query_type === 'tag-edit' ? 'tag-query' : query_type);
+}
+
+function ParseQuery(text, caret) {
+    let before_caret_text = text.substring(0, caret);
+    let match = before_caret_text.match(TERM_REGEX);
+    let operator = match[1];
+    let metatag = match[2] ? match[2].toLowerCase() : "tag";
+    let term = match[3];
+    let prefix = operator;
+    if (metatag !== 'tag') {
+        prefix += metatag + ':';
+    }
+    if (IAC.categories.includes(metatag)) {
+        metatag = 'tag';
+    }
+    return {operator, metatag, term, prefix};
+}
+
+function RemoveTerm(str, index) {
+    str = ' ' + str + ' ';
+    let first_slice = str.slice(0, index);
+    let second_slice = str.slice(index);
+    let first_space = first_slice.lastIndexOf(' ');
+    let second_space = second_slice.indexOf(' ');
+    return (first_slice.slice(0, first_space) + second_slice.slice(second_space)).slice(1, -1);
+}
+
+function GetConstantMatches(constant_data, term) {
+    let matching = [];
+    let nonmatching = [];
+    constant_data.forEach((data) => {
+        if (GetGlobMatches(data.name, term)) {
+            matching.push(data);
+        } else {
+            nonmatching.push(data);
+        }
+    });
+    return Utility.concat(matching, nonmatching).map((data) => Utility.assignObjects({term}, data));
+}
+
+function GetConsequentMatch(term, tag) {
+    let retval = {source: 'tag', antecedent: null};
+    let regex = RegExp('^' + Utility.regexpEscape(term).replace(/\\\*/g, '.*'));
+    if (!tag.name.match(regex)) {
+        let matching_consequent = tag.consequent_aliases.filter((consequent) => consequent.antecedent_name.match(regex));
+        if (matching_consequent.length) {
+            retval = {source: 'tag-alias', antecedent: matching_consequent[0].antecedent_name};
+        }
+    }
+    return retval;
+}
+
+const MapMetatag = (type, metatag, value) => ({
+    type,
+    antecedent: null,
+    label: metatag + ':' + value,
+    value: metatag + ':' + value,
+    name: metatag + ':' + value,
+    original: value,
+    post_count: METATAG_TAG_CATEGORY,
+    source: 'metatag',
+    category: METATAG_TAG_CATEGORY
+});
+
+function MetatagData(type) {
+    MetatagData.memoized ??= {};
+    if (!MetatagData.memoized[type]) {
+        let metatags = (type === 'tag-edit' ? EDIT_METATAGS : QUERY_METATAGS);
+        MetatagData.memoized[type] = metatags
+            .filter((tag) => (tag[0] !== '-'))
+            .map((tag) => (MapMetatag('tag', tag, "")));
+    }
+    return MetatagData.memoized[type];
+}
+
+function SubmetatagData(type) {
+    SubmetatagData.memoized ??= {};
+    if (!SubmetatagData.memoized[type]) {
+        SubmetatagData.memoized[type] = [];
+        let mapping = (type === 'tag-edit' ? EDIT_METATAGS_MAP : QUERY_METATAGS_MAP);
+        for (let metatag in mapping) {
+            for (let i = 0; i < mapping[metatag].length; i++) {
+                SubmetatagData.memoized[type].push(MapMetatag('metatag', metatag, mapping[metatag][i]));
+            }
+        }
+    }
+    return SubmetatagData.memoized[type];
+}
+
+function GlobRegex(search, use_capture, return_groups = false) {
+    GlobRegex.regexes ||= {};
+    GlobRegex.capture_groups ||= {};
+    let key = search + '\xff' + use_capture;
+    if (!(key in GlobRegex.regexes)) {
+        const captureMap = (
+            use_capture ?
+                (val) => (val.slice(0, 2) === String.raw`\*` ? '(.*)' : `(${val})`) :
+                (val) => (val.slice(0, 2) === String.raw`\*` ? '.*' : `${val}`)
+        );
+        GlobRegex.capture_groups[key] = Utility.findAll(search, /\*|[^*]+/g)
+            .filter((val) => val !== '')
+            .map((val) => Utility.regexpEscape(val))
+            .map(captureMap);
+        GlobRegex.regexes[key] = new RegExp('^' + GlobRegex.capture_groups[key].join("") + '$', 'i');
+    }
+    return (return_groups ? GlobRegex.capture_groups[key] : GlobRegex.regexes[key]);
+}
+
+function WordRegex(search, use_capture, return_groups = false) {
+    WordRegex.regexes ||= {};
+    WordRegex.capture_groups ||= {};
+    let key = search + '\xff' + use_capture;
+    if (!(key in WordRegex.regexes)) {
+        let bookend = (use_capture ? '(.*)' : '.*');
+        let capture_groups = Utility.findAll(search, ALL_DELIMTER_RG)
+            .filter((val) => val !== '')
+            .map((word) => {
+                if (word.match(DELIMITER_GROUP_RG)) {
+                    return (use_capture ? '(.*)' : '.*');
+                }
+                let escape_word = Utility.regexpEscape(word);
+                return DELIMITER_LOOKBEHIND + (use_capture ? `(${escape_word})` : escape_word);
+            });
+        WordRegex.capture_groups[key] = [bookend, ...capture_groups, bookend];
+        WordRegex.regexes[key] = new RegExp(WordRegex.capture_groups[key].join("") + '(.*)', 'i');
+    }
+    return (return_groups ? WordRegex.capture_groups[key] : WordRegex.regexes[key]);
+}
+
+//Get regex from separate function and memoize that value
+function GetGlobMatches(name, search, use_capture) {
+    let regex = GlobRegex(search, use_capture);
+    let match = name.match(regex);
+    return match;
+}
+
+//Get regex from separate function and memoize that value
+function GetWordMatches(name, search, use_capture) {
+    let regex = WordRegex(search, use_capture);
+    let match = name.match(regex);
+    return match;
+}
+
+function SetAutocompleteRender($fields, render_item, render_menu) {
+    setTimeout(() => {
+        $fields.each((_, field) => {
+            let autocomplete = $(field).data('uiAutocomplete');
+            autocomplete._renderItem = render_item;
+            autocomplete._renderMenu = render_menu;
+        });
+    }, JQUERY_DELAY);
+}
+
+//Time functions
+
+function MinimumExpirationTime(type) {
+    return EXPIRATION_CONFIG[type].minimum;
+}
+
+function MaximumExpirationTime(type) {
+    return (EXPIRATION_CONFIG[type].maximum ? EXPIRATION_CONFIG[type].maximum : EXPIRATION_CONFIG[type].minimum);
+}
+
+//Logarithmic increase of expiration time based upon a count
+function ExpirationTime(type, count) {
+    let config = EXPIRATION_CONFIG[type];
+    let expiration = Math.log10(10 * count / config.logarithmic_start) * config.minimum;
+    expiration = Math.max(expiration, config.minimum);
+    expiration = Math.min(expiration, config.maximum);
+    return Math.round(expiration);
+}
+
+//Render functions
+
+function AutocompleteRenderItem(list, item) {
+    if ('html' in item) {
+        return DanbooruProxy.Autocomplete.render_item(list, item);
+    }
+    if (SOURCE_CONFIG[item.type].render) {
+        return RenderListItem(SOURCE_CONFIG[item.type].render)(list, item);
+    }
+    let tag_html = "";
+    if (item.antecedent) {
+        tag_html = `<span class="autocomplete-tag">${item.label}</span>`;
+        let antecedent = item.antecedent.replace(/_/g, " ");
+        tag_html = '<span class="autocomplete-arrow">→</span>' + tag_html;
+        tag_html = `<span class="autocomplete-antecedent autocomplete-item">${antecedent}</span>` + tag_html;
+    } else {
+        tag_html = `<span class="autocomplete-tag autocomplete-item">${item.label}</span>`;
+    }
+    let post_text = "";
+    if (item.post_count !== undefined) {
+        let count = item.post_count;
+        post_text = String(item.post_count);
+        if (count >= 1000000) {
+            post_text = Utility.setPrecision(count / 1000000, 2) + 'M';
+        } else if (count >= 1000) {
+            post_text = Utility.setPrecision(count / 1000, 2) + "k";
+        }
+    }
+    let url = '/posts?tags=' + encodeURIComponent(item.name);
+    let link_classes = ['iac-autocomplete-link'];
+    if (item.type === 'tag') {
+        link_classes.push('tag-type-' + item.category);
+    } else if (item.type === 'user') {
+        link_classes.push('user-' + item.level.toLowerCase());
+    } else if (item.type === 'pool') {
+        link_classes.push('pool-category-' + item.category);
+    }
+    let line_item = LINE_ITEM_TEMPLATE({url, link_classes: link_classes.join(' '), tag_html, post_text});
+    let data_items = ["type", "antecedent", "value", "category", "post_count"].map((attr) => `data-autocomplete-${attr.replace(/_/g, "-")}="${item[attr]}"`);
+    let $list_item = $(LIST_ITEM_TEMPLATE({data_items: data_items.join(' '), line_item}));
+    $list_item.data("item.autocomplete", item);
+    $list_item.find('a').on(JSPLib.event.click, (event) => {event.preventDefault();});
+    $list_item.appendTo(list);
+    HighlightSelected($list_item, item);
+    return $list_item;
+}
+
+function RenderListItem(alink_func) {
+    return function (list, item) {
+        let $link = alink_func($('<a/>'), item);
+        let $container = $('<div/>').append($link);
+        HighlightSelected($container, item);
+        return $('<li/>').data('item.autocomplete', item).append($container).appendTo(list);
+    };
+}
+
+function RenderMenuItem(ul, items) {
+    items.forEach((item) => {
+        this._renderItemData(ul, item);
+    });
+}
+
+function RenderAutocompleteNotice(type, list, index) {
+    let values = list.map((val, i) => (index === i ? `<u>${val}</u>` : val));
+    let line = values.join('&nbsp;|&nbsp;');
+    return `<b>Autocomplete ${type}</b>: ${line}`;
+}
+
+//Main helper functions
+
+function CapitalizeAutocomplete(string) {
+    switch (IAC.ac_caps) {
+        case 1:
+            return string.toUpperCase();
+        case 2:
+            return Utility.titleize(string);
+        case 3:
+            return ProperCase(string);
+        case 4:
+            return ExceptCase(string);
+        case 5:
+            return RomanCase(string);
+        case 0:
+        default:
+            return string;
+    }
+}
+
+function FixupMetatag(value, metatag) {
+    switch(metatag) {
+        case '@':
+            value.value = '@' + value.name;
+            value.label = value.name;
+            break;
+        case "":
+            value.value = value.name;
+            value.label = value.name.replace(/_/g, ' ');
+            break;
+        default:
+            metatag = metatag.replace(/:$/, "");
+            value.value = metatag + ':' + value.name;
+            value.label = value.name.replace(/_/g, ' ');
+    }
+}
+
+function SortSources(data) {
+    var scaler;
+    switch(IAC.postcount_scale[0]) {
+        case 'logarithmic':
+            scaler = ((num) => Math.log(num));
+            break;
+        case 'square_root':
+            scaler = ((num) => Math.sqrt(num));
+            break;
+        case 'linear':
+        default:
+            scaler = ((num) => num);
+    }
+    data.sort((a, b) => {
+        let mult_a = IAC[`${a.source}_source_weight`];
+        let mult_b = IAC[`${b.source}_source_weight`];
+        let weight_a = mult_a * scaler(a.post_count);
+        let weight_b = mult_b * scaler(b.post_count);
+        return weight_b - weight_a;
+    }).forEach((entry, i) => {
+        data[i] = entry;
+    });
+}
+
+function GroupSources(data) {
+    let source_order = IAC.source_order;
+    data.sort((a, b) => (source_order.indexOf(a.source) - source_order.indexOf(b.source)));
+}
+
+//Usage functions
+
+function KeepSourceData(type, metatag, data) {
+    IAC.source_data[type] = IAC.source_data[type] || {};
+    data.forEach((val) => {
+        let orig_key = val.name.replace(RegExp(`^${metatag}:?`), "");
+        let key = (val.antecedent ? val.antecedent + '\xff' + orig_key : orig_key);
+        IAC.source_data[type][key] = val;
+    });
+}
+
+function GetChoiceOrder(type, query, word_mode, is_blank) {
+    let queryterm = query.toLowerCase() + (type === 'metatag' && !query.endsWith('*') ? '*' : "");
+    var available_choices;
+    if (!is_blank) {
+        let regex = (word_mode ? WordRegex(queryterm, false) : GlobRegex(queryterm, false));
+        available_choices = IAC.choice_order[type].filter((name) => name.toLowerCase().match(regex));
+    } else {
+        available_choices = IAC.choice_order[type];
+    }
+    return available_choices.filter((tag) => (IAC.choice_data[type][tag].use_count > 0)).toSorted((a, b) => IAC.choice_data[type][b].use_count - IAC.choice_data[type][a].use_count);
+}
+
+function AddUserSelected(type, metatag, term, data, query_type, word_mode, key, is_blank) {
+    IAC.shown_data = [];
+    let order = IAC.choice_order[type];
+    let choice = IAC.choice_data[type];
+    if (!order || !choice) {
+        return;
+    }
+    let user_order = GetChoiceOrder(type, term, word_mode, is_blank);
+    let check_values = ['tag-edit', 'tag-query'].includes(query_type);
+    let valid_values = (check_values ? Utility.getObjectAttributes(data, 'name') : []);
+    for (let i = user_order.length - 1; i >= 0; i--) {
+        let checkterm = user_order[i];
+        if (query_type === 'tag' && choice[checkterm].category === METATAG_TAG_CATEGORY) {
+            // Don't insert static tags on tag-only inputs
+            continue;
+        }
+        if (check_values && choice[checkterm].category === METATAG_TAG_CATEGORY && !valid_values.includes(checkterm)) {
+            // Don't insert static metatags where they're not valid: tag-query and tag-edit have different sets.
+            continue;
+        }
+        //Splice out Danbooru data if it exists
+        for (let j = 0; j < data.length; j++) {
+            let compareterm = (data[j].antecedent ? data[j].antecedent + '\xff' + data[j].name : data[j].name);
+            if (compareterm === checkterm) {
+                data.splice(j, 1);
+                //Should only be one of these at most
+                break;
+            }
+        }
+        let add_data = Utility.mergeObjects(choice[user_order[i]], {term, key, type});
+        if (type === 'tag' && ['tag', 'tag-word'].includes(add_data.source)) {
+            add_data.source = (word_mode ? 'tag-word' : 'tag');
+        }
+        FixupMetatag(add_data, metatag);
+        data.unshift(add_data);
+        IAC.shown_data.push(user_order[i]);
+    }
+    data.splice(IAC.source_results_returned);
+}
+
+//For autocomplete select
+function InsertUserSelected(input, item) {
+    const printer = Debug.getFunctionPrint('InsertUserSelected');
+    if (!IAC.usage_enabled || !$(input).hasClass('iac-autocomplete')) {
+        return;
+    }
+    var term, source_data;
+    let type = item.type;
+    if (item.category === BUR_TAG_CATEGORY) {
+        return;
+    }
+    if ($(input).data('multiple') === false) {
+        input.name = input.name.trim();
+    }
+    if (item.antecedent) {
+        term = item.antecedent + '\xff' + item.name;
+    } else {
+        term = item.name;
+    }
+    if (item.category === METATAG_TAG_CATEGORY || item.source === 'tag-abbreviation') {
+        source_data = item;
+    }
+    else
+    //Final failsafe
+    if (!IAC.source_data[type] || !IAC.source_data[type][term]) {
+        if (!IAC.choice_data[type] || !IAC.choice_data[type][term]) {
+            printer.log("Error: Bad data selector!", type, term, item);
+            return;
+        }
+        source_data = IAC.choice_data[type][term];
+    } else {
+        source_data = IAC.source_data[type][term];
+    }
+    IAC.choice_order[type] = IAC.choice_order[type] || [];
+    IAC.choice_data[type] = IAC.choice_data[type] || {};
+    IAC.choice_order[type].unshift(term);
+    IAC.choice_order[type] = Utility.arrayUnique(IAC.choice_order[type]);
+    //So the use count doesn't get squashed by the new variable assignment
+    let use_count = (IAC.choice_data[type][term] && IAC.choice_data[type][term].use_count) || 0;
+    IAC.choice_data[type][term] = Utility.deepCopy(source_data);
+    ['key', 'term', 'label', 'value', 'type', 'original'].forEach((e) => {delete IAC.choice_data[type][term][e];});
+    IAC.choice_data[type][term].expires = Utility.getExpires(GetUsageExpires());
+    IAC.choice_data[type][term].use_count = use_count + 1;
+    if (IAC.usage_maximum > 0) {
+        IAC.choice_data[type][term].use_count = Math.min(IAC.choice_data[type][term].use_count, IAC.usage_maximum);
+    }
+    IAC.shown_data.forEach((key) => {
+        if (key !== term) {
+            IAC.choice_data[type][key].use_count = IAC.choice_data[type][key].use_count || 0;
+            IAC.choice_data[type][key].use_count *= IAC.usage_multiplier;
+        }
+    });
+    StoreUsageData('insert', term);
+}
+
+function InsertCompletion(input, item) {
+    let completion = item.name;
+    if (!$(input).hasClass('iac-autocomplete')) {
+        DanbooruProxy.Autocomplete.insert_completion(input, completion);
+        return;
+    }
+    let query_type = GetQueryType(input);
+    var before_caret_text = input.value.substring(0, input.selectionStart);
+    var after_caret_text = input.value.substring(input.selectionStart);
+    var regexp = new RegExp('(' + IAC.prefixes.join('|') + ')?\\S+$', 'g');
+    let $input = $(input);
+    let start = 0, end = 0;
+    if ($input.data('insert-autocomplete')) {
+        let display_text = completion;
+        let current_mode = AUTOCOMPLETE_MODE[IAC.ac_mode];
+        if (['tag', 'normal'].includes(current_mode)) {
+            if (current_mode === 'normal') {
+                display_text = display_text.replace(/_/g, ' ');
+                display_text = CapitalizeAutocomplete(display_text);
+            }
+            before_caret_text = before_caret_text.replace(regexp, '$1') + '[[' + display_text + ']]';
+            start = end = before_caret_text.length;
+        } else if (['pipe', 'custom'].includes(current_mode)) {
+            let insert_text = "insert text";
+            if (current_mode === 'pipe') {
+                display_text = display_text.replace(/_/g, ' ');
+                display_text = CapitalizeAutocomplete(display_text);
+                insert_text = "";
+            }
+            before_caret_text = before_caret_text.replace(regexp, '$1') + `[[${display_text}|${insert_text}]]`;
+            if (current_mode === 'pipe') {
+                start = end = before_caret_text.length;
+            } else {
+                //Current mode == custom
+                start = before_caret_text.length - 13;
+                end = before_caret_text.length - 2;
+            }
+        }
+        setTimeout(() => {DisableTextAreaAutocomplete($input);}, 1);
+    } else {
+        // Trim all whitespace (tabs, spaces) except for line returns
+        before_caret_text = before_caret_text.replace(/^[ \t]+|[ \t]+$/gm, "");
+        after_caret_text = after_caret_text.replace(/^[ \t]+|[ \t]+$/gm, "");
+        before_caret_text = before_caret_text.substring(0, before_caret_text.search(/\S+$/));
+        var prefix = "";
+        var query = ParseQuery(input.value, input.selectionStart);
+        if (item.source !== 'metatag') {
+            prefix = query_type === 'tag-edit' || !CATEGORY_REGEX.test(query.prefix) ? query.prefix : query.operator;
+            if (IAC.is_bur && IAC.BUR_source_enabled) {
+                let line_text = before_caret_text.split('\n').at(-1);
+                let words = line_text.split(/\s+/);
+                if (words.length === 1 || words[0] !== 'update') {
+                    // Commands should not have a prefix, and only the update command should have tags with prefixes
+                    prefix = "";
+                }
+            }
+        } else {
+            prefix = query.operator;
+        }
+        before_caret_text += prefix + completion + ' ';
+        start = end = before_caret_text.length;
+    }
+    input.value = before_caret_text + after_caret_text;
+    input.selectionStart = start;
+    input.selectionEnd = end;
+    $(input).trigger("input");
+    if (item.category === METATAG_TAG_CATEGORY && item.type === 'tag') {
+        let mapping = (query_type === 'tag-edit' ? EDIT_METATAGS_MAP : QUERY_METATAGS_MAP);
+        let option_metatags = (query_type === 'tag-query' ? ALL_OPTION_METATAGS : []);
+        let normalized_metatag = item.name.slice(0, -1);
+        input.selectionStart = input.selectionEnd = input.selectionStart - 1;
+        if (item.source === 'metatag' && (normalized_metatag in mapping || option_metatags.includes(normalized_metatag))) {
+            setTimeout(() => {$(input).autocomplete('search');}, 1);
+            return;
+        }
+    }
+    setTimeout(() => {$(input).autocomplete("instance").close();}, 1);
+}
+
+function StaticMetatagSource(term, metatag, query_type) {
+    let lower_term = term.toLowerCase();
+    let full_term = `${metatag}:${lower_term}`;
+    let data = SubmetatagData(query_type)
+        .filter((item) => item.name.startsWith(full_term))
+        .map((item) => Utility.mergeObjects(item, {term}))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, IAC.source_results_returned);
+    AddUserSelected('metatag', "", full_term, data, query_type, false, null, false);
+    return data;
+}
+
+function UserOptions(term, metatag, data) {
+    if (USER_OPTION_METATAGS.includes(metatag.slice(0, -1))) {
+        if (term.length === 0 || GetGlobMatches('none', term + '*')) {
+            data.unshift({
+                name: 'none',
+                level: 'system',
+            });
+        }
+        if (term.length === 0 || GetGlobMatches('any', term + '*')) {
+            data.unshift({
+                name: 'any',
+                level: 'system',
+            });
+        }
+    }
+    return data;
+}
+
+function FavgroupOptions(term, metatag, data) {
+    if (FAVGROUP_OPTION_METATAGS.includes(metatag.slice(0, -1))) {
+        if (term.length === 0 || GetGlobMatches('none', term + '*')) {
+            data.unshift({
+                name: 'none',
+                post_count: 0,
+                category: 'system',
+            });
+        }
+        if (term.length === 0 || GetGlobMatches('any', term + '*')) {
+            data.unshift({
+                name: 'any',
+                post_count: 0,
+                category: 'system',
+            });
+        }
+    }
+    return data;
+}
+
+function PoolOptions(term, metatag, data) {
+    if (POOL_OPTION_METATAGS.includes(metatag.slice(0, -1))) {
+        if (term.length === 0 || GetGlobMatches('collection', term + '*')) {
+            data.unshift({
+                name: 'collection',
+                post_count: 0,
+                category: 'collection',
+            });
+        }
+        if (term.length === 0 || GetGlobMatches('series', term + '*')) {
+            data.unshift({
+                name: 'series',
+                post_count: 0,
+                category: 'series',
+            });
+        }
+        if (term.length === 0 || GetGlobMatches('none', term + '*')) {
+            data.unshift({
+                name: 'none',
+                post_count: 0,
+                category: 'system',
+            });
+        }
+        if (term.length === 0 || GetGlobMatches('any', term + '*')) {
+            data.unshift({
+                name: 'any',
+                post_count: 0,
+                category: 'system',
+            });
+        }
+    }
+    return data;
+}
+
+function SavedSearchOptions(term, metatag, data) {
+    if (SAVED_SEARCH_OPTION_METATAGS.includes(metatag.slice(0, -1))) {
+        if (term.length === 0 || GetGlobMatches('all', term + '*')) {
+            data.unshift({
+                name: 'all',
+                category: 'system',
+            });
+        }
+    }
+    return data;
+}
+
+function TypeBlankResults(type, key, metatag, all_metatags, autocomplete) {
+    if (all_metatags.includes(metatag.slice(0, -1))) {
+        let input = autocomplete.element.get(0);
+        let query_type = GetQueryType(input);
+        return ProcessSourceData(type, key + '-', "", metatag, query_type, false, [], input, true);
+    }
+    return [];
+}
+
+//For autocomplete render
+function HighlightSelected($link, item) {
+    if (IAC.source_highlight_enabled) {
+        if (item.expires) {
+            $($link).addClass('iac-user-choice');
+        }
+        if (item.type === 'tag' || item.type === 'metatag') {
+            $($link).addClass('iac-tag-highlight');
+            switch (item.source) {
+                case 'tag':
+                    $($link).addClass('iac-tag-exact');
+                    break;
+                case 'tag-word':
+                    $($link).addClass('iac-tag-word');
+                    break;
+                case 'tag-abbreviation':
+                    $($link).addClass('iac-tag-abbreviation');
+                    break;
+                case 'tag-alias':
+                    $($link).addClass('iac-tag-alias');
+                    break;
+                case 'tag-autocorrect':
+                    $($link).addClass('iac-tag-autocorrect');
+                    break;
+                case 'tag-other-name':
+                    $($link).addClass('iac-tag-other-name');
+                    break;
+                case 'bur':
+                    $($link).addClass('iac-tag-bur');
+                    break;
+                case 'metatag':
+                    $($link).addClass('iac-tag-metatag');
+                    //falls through
+                default:
+                    //Do nothing
+            }
+        }
+        if (IAC.highlight_used && IAC.current_tags.includes(item.name)) {
+            $($link).addClass('iac-already-used');
+        }
+    }
+    if (IAC.highlight_words_enabled) {
+        let term = item.term;
+        if (item.type === 'tag' || item.type === 'metatag') {
+            term += (item.source === 'metatag' && !item.term.endsWith('*') ? '*' : "");
+            let [tagname, tagclass] = (item.antecedent ? [item.antecedent, 'autocomplete-antecedent'] : [item.name, 'autocomplete-tag']);
+            let highlight_html = (item.source === 'tag-word' ? HighlightWords(term, tagname) : HighlightGlobs(term, tagname, item.type));
+            if (highlight_html) {
+                $link.find('.' + tagclass).html(highlight_html);
+            }
+        } else {
+            let value = term;
+            let highlight_html = HighlightGlobs(value, item.name);
+            if (highlight_html) {
+                $link.find('a').html(highlight_html);
+            }
+        }
+    }
+    if (item.source === 'metatag') {
+        $('a', $link).addClass('tag-type-' + item.category);
+        $('.post-count', $link).text('metatag');
+    }
+    if (item.type === 'tag') {
+        $($link).attr('data-autocomplete-type', item.source);
+    }
+    return $link;
+}
+
+function HighlightWords(search, name) {
+    let regex = WordRegex(search, true);
+    let capture_groups = WordRegex(search, true, true);
+    let word_match = name.match(regex);
+    if (!word_match) return null;
+    let html_sections = word_match.slice(1).map((match, i) => {
+        let label = match.replace(/_/g, "&ensp;");
+        return (capture_groups[i] !== '(.*)' ? `<span class="iac-highlight-match iac-word-match">${label}</span>` : label);
+    });
+    return html_sections.join("");
+}
+
+function HighlightGlobs(search, name) {
+    let regex = GlobRegex(search, true);
+    let capture_groups = GlobRegex(search, true, true);
+    let glob_match = name.match(regex);
+    if (!glob_match) return null;
+    let html_sections = glob_match.slice(1).map((match, i) => {
+        let label = match.replace(/_/g, "&ensp;");
+        return (capture_groups[i] !== '(.*)' ? `<span class="iac-highlight-match iac-glob-match">${label}</span>` : label);
+    });
+    return html_sections.join("");
+}
+
+function CorrectUsageData() {
+    const printer = Debug.getFunctionPrint('CorrectUsageData');
+    let error_messages = ValidateUsageData(IAC);
+    if (error_messages.length) {
+        printer.log("Corrections to usage data detected!");
+        error_messages.forEach((error) => {printer.log(error);});
+        StoreUsageData('correction');
+    } else {
+        printer.log("Usage data is valid.");
+    }
+}
+
+function PruneUsageData() {
+    const printer = Debug.getFunctionPrint('PruneUsageData');
+    let is_dirty = false;
+    for (let type_key in IAC.choice_data) {
+        let type_entry = IAC.choice_data[type_key];
+        for (let key in type_entry) {
+            let entry = type_entry[key];
+            if (!Utility.validateExpires(entry.expires, GetUsageExpires())) {
+                printer.log("Pruning choice data!", type_key, key);
+                IAC.choice_order[type_key] = Utility.arrayDifference(IAC.choice_order[type_key], [key]);
+                delete type_entry[key];
+                is_dirty = true;
+            }
+        }
+    }
+    if (is_dirty) {
+        StoreUsageData('prune');
+    }
+}
+
+function StoreUsageData(name, key = "", save = true) {
+    if (save) {
+        Storage.setLocalData('iac-choice-info', {choice_order: IAC.choice_order, choice_data: IAC.choice_data});
+    }
+    IAC.channel.postMessage({type: 'reload', name, key, choice_order: IAC.choice_order, choice_data: IAC.choice_data});
+}
+
+////Setup functions
+
+function DelayInitializeAutocomplete(...args) {
+    setTimeout(() => {InitializeAutocompleteIndexed(...args);}, JQUERY_DELAY);
+}
+
+function DelayInitializeTagAutocomplete(selector, type) {
+    if (selector && type) {
+        $(selector).attr('data-autocomplete', type);
+    }
+    clearTimeout(DelayInitializeTagAutocomplete.timer);
+    DelayInitializeTagAutocomplete.timer = setTimeout(InitializeTagQueryAutocompleteIndexed, JQUERY_DELAY);
+}
+
+//Rebind callback functions
+
+function RebindAutocomplete({name, selector, func} = {}) {
+    Utility.DOMWaitExecute({
+        name,
+        data_check: {
+            selector,
+            key: 'uiAutocomplete',
+        },
+        found () {
+            $(selector).each((_, entry) => {
+                if ($(entry).autocomplete('instance')) {
+                    $(entry).autocomplete('destroy').off('keydown.Autocomplete.tab');
+                }
+            });
+            func();
+        },
+        interval: TIMER_POLL_INTERVAL,
+        duration: Utility.one_second * 5,
+    });
+}
+
+function RebindAnyAutocomplete(selector, keycode, multiple) {
+    RebindAutocomplete({
+        name: `rebind any autocomplete: ${keycode}`,
+        selector,
+        func () {
+            InitializeAutocompleteIndexed(selector, keycode, {multiple});
+        },
+    });
+}
+
+function RebindMultipleTag() {
+    RebindAutocomplete({
+        name: "rebind multiple tag",
+        selector: AUTOCOMPLETE_MULTITAG_SELECTORS,
+        func () {
+            InitializeTagQueryAutocompleteIndexed();
+        },
+    });
+}
+
+function RebindSingleTag() {
+    RebindAutocomplete({
+        name: "rebind single tag",
+        selector: '[data-autocomplete=tag]',
+        func () {
+            let $fields = $('[data-autocomplete=tag]');
+            $fields.autocomplete({
+                minLength: 1,
+                autoFocus: true,
+                async source(request, respond) {
+                    let results = await IAC.tag_source(request.term, {autocomplete: this});
+                    respond(results);
+                },
+                select (_, ui) {
+                    InsertUserSelected(this, ui.item);
+                },
+            });
+            $fields.addClass('iac-autocomplete');
+            SetAutocompleteRender($fields, AutocompleteRenderItem, RenderMenuItem);
+        },
+    });
+}
+
+function ReorderAutocompleteEvent($obj) {
+    function RequeueEvent(str, event_array) {
+        let position = event_array.findIndex((event) => event.namespace.startsWith(str));
+        let item = event_array.splice(position, 1);
+        event_array.unshift(item[0]);
+    }
+    try {
+        let private_data = Utility.getPrivateData($obj[0]);
+        let keydown_events = Utility.getNestedAttribute(private_data, ['events', 'keydown']);
+        RequeueEvent('autocomplete', keydown_events);
+        //The tab event handler must go before the autocomplete handler
+        RequeueEvent('Autocomplete.Tab', keydown_events);
+    } catch (error) {
+        Debug.error("Unable to reorder autocomplete events!", error);
+    }
+}
+
+//Initialization functions
+
+function InitializeTagQueryAutocompleteIndexed(fields_selector = AUTOCOMPLETE_MULTITAG_SELECTORS, reorder_selector = '#post_tag_string') {
+    let $fields_multiple = GetJqueryObj(fields_selector);
+    $fields_multiple.autocomplete({
+        select(event, ui) {
+            if (event.key === "Enter") {
+                event.stopImmediatePropagation();
+            }
+            InsertCompletion(this, ui.item);
+            InsertUserSelected(this, ui.item);
+            return false;
+        },
+        async source(request, respond) {
+            var query_type = GetQueryType(this.element.get(0));
+            var query = ParseQuery(request.term, this.element.get(0).selectionStart);
+            var metatag = query.metatag;
+            var term = query.term;
+            var prefix = query.prefix;
+            var results = [];
+            var metatag_type = null;
+            var regex_map = (query_type === 'tag-edit' ? EDIT_METATAG_REGEXES : QUERY_METATAG_REGEXES);
+            for (let key in regex_map) {
+                let match = regex_map[key].exec(metatag);
+                if (match) {
+                    metatag_type = key;
+                    break;
+                }
+            }
+            switch (metatag_type) {
+                case "static":
+                    results = IAC.static_metatag_source(term, metatag, query_type);
+                    break;
+                case "user":
+                    results = await IAC.user_source(term, {prefix, autocomplete: this});
+                    break;
+                case "pool":
+                    results = await IAC.pool_source(term, {prefix, autocomplete: this});
+                    break;
+                case "favgroup":
+                    results = await IAC.favorite_group_source(term, {prefix, autocomplete: this});
+                    break;
+                case "search":
+                    results = await IAC.saved_search_source(term, {prefix, autocomplete: this});
+                    break;
+                case "tag":
+                    results = await IAC.tag_source(term, {autocomplete: this});
+                    break;
+                default:
+                    results = [];
+                    break;
+            }
+            respond(results);
+        },
+    });
+    SetAutocompleteRender($fields_multiple, AutocompleteRenderItem, RenderMenuItem);
+    $fields_multiple.addClass('iac-autocomplete');
+    if (reorder_selector) {
+        let $tag_input_fields = $(reorder_selector);
+        if ($tag_input_fields.length) {
+            ReorderAutocompleteEvent($tag_input_fields);
+        }
+    }
+}
+
+function InitializeAutocompleteIndexed(selector, keycode, {multiple = false, wiki_link = false} = {}) {
+    let type = SOURCE_KEY[keycode];
+    var $fields = GetJqueryObj(selector);
+    let autocomplete = AnySourceIndexed(keycode);
+    $fields.autocomplete({
+        minLength: 1,
+        delay: 100,
+        async source(request, respond) {
+            let parse = ParseQuery(request.term, this.element.get(0).selectionStart);
+            if (parse.prefix || !parse.term) {
+                respond([]);
+                return;
+            }
+            let results = await autocomplete(parse.term, {autocomplete: this});
+            respond(results);
+        },
+        select (event, ui) {
+            InsertUserSelected(this, ui.item);
+            if (multiple || wiki_link) {
+                InsertCompletion(this, ui.item);
+                if (wiki_link || event.key === 'Enter') {
+                    event.stopImmediatePropagation();
+                }
+                return false;
+            }
+            ui.item.name = ui.item.name.trim();
+            return ui.item.name;
+        },
+    });
+    if (wiki_link) {
+        SetAutocompleteRender($fields, AutocompleteRenderItem, RenderMenuItem);
+    } else {
+        let alink_func = (SOURCE_CONFIG[type].render ? SOURCE_CONFIG[type].render : ($domobj, item) => $domobj.text(item.name));
+        SetAutocompleteRender($fields, RenderListItem(alink_func), RenderMenuItem);
+    }
+    if (!Utility.isNamespaceBound({root: selector, eventtype: 'keydown', namespace: 'Autocomplete.tab'})) {
+        $fields.on('keydown.Autocomplete.tab', null, 'tab', DanbooruProxy.Autocomplete.on_tab);
+    }
+    $fields.data('autocomplete', type);
+    $fields.data('multiple', multiple || wiki_link);
+    $fields.addClass('iac-autocomplete');
+}
+
+function InitializeTextAreaAutocomplete(selector = 'textarea:not([data-autocomplete]), input[type=text]:not([data-autocomplete])') {
+    IAC.ac_source = Storage.getLocalData('iac-ac-source', {default_val: 0});
+    IAC.ac_mode = Storage.getLocalData('iac-ac-mode', {default_val: 0});
+    IAC.ac_caps = Storage.getLocalData('iac-ac-caps', {default_val: 0});
+    $(selector).filter(':not(.iac-autocomplete)').on(JSPLib.event.keydown, null, 'alt+a', (event) => {
+        let $input = $(event.currentTarget);
+        let type = AUTOCOMPLETE_SOURCE[IAC.ac_source];
+        if (!$input.data('insert-autocomplete')) {
+            EnableTextAreaAutocomplete($input, type);
+        } else {
+            DisableTextAreaAutocomplete($input, type);
+        }
+    }).data('insert-autocomplete', false);
+    $(selector).filter(':not(.iac-autocomplete)').on(JSPLib.event.keydown, null, 'alt+1 alt+2 alt+3', (event) => {
+        if (event.originalEvent.key === '1') {
+            IAC.ac_source = (IAC.ac_source + 1) % AUTOCOMPLETE_SOURCE.length;
+            Notice.notice(RenderAutocompleteNotice('source', AUTOCOMPLETE_SOURCE, IAC.ac_source));
+            Storage.setLocalData('iac-ac-source', IAC.ac_source);
+        } else if (event.originalEvent.key === '2') {
+            IAC.ac_mode = (IAC.ac_mode + 1) % AUTOCOMPLETE_MODE.length;
+            Notice.notice(RenderAutocompleteNotice('mode', AUTOCOMPLETE_MODE, IAC.ac_mode));
+            Storage.setLocalData('iac-ac-mode', IAC.ac_mode);
+        } else if (event.originalEvent.key === '3') {
+            IAC.ac_caps = (IAC.ac_caps + 1) % AUTOCOMPLETE_CAPITALIZATION.length;
+            Notice.notice(RenderAutocompleteNotice('capitalization', AUTOCOMPLETE_CAPITALIZATION, IAC.ac_caps));
+            Storage.setLocalData('iac-ac-caps', IAC.ac_caps);
+        }
+        IAC.channel.postMessage({type: 'text_autocomplete', source: IAC.ac_source, mode: IAC.ac_mode, caps: IAC.ac_caps});
+    }).addClass('iac-autocomplete');
+}
+
+function EnableTextAreaAutocomplete($input, type) {
+    if ($input.closest('.autocomplete-mentions').length > 0) {
+        $input.autocomplete('destroy').off('keydown.Autocomplete.tab');
+    }
+    let type_shortcut = PROGRAM_DATA_KEY[type];
+    InitializeAutocompleteIndexed($input, type_shortcut, {wiki_link: true});
+    $input.data('insert-autocomplete', true);
+    $input.data('autocomplete', 'tag');
+    Notice.notice(Utility.sprintf(AUTOCOMPLETE_MESSAGE, AUTOCOMPLETE_SOURCE[IAC.ac_source], AUTOCOMPLETE_MODE[IAC.ac_mode], AUTOCOMPLETE_CAPITALIZATION[IAC.ac_caps]));
+}
+
+function DisableTextAreaAutocomplete($input) {
+    $input.autocomplete('destroy').off('keydown.Autocomplete.tab');
+    $input.data('insert-autocomplete', false);
+    $input.data('autocomplete', "");
+    Notice.notice("<b>Autocomplete turned off!</b>");
+    if ($input.closest('.autocomplete-mentions').length > 0) {
+        DanbooruProxy.Autocomplete.initialize_mention_autocomplete($input);
+    }
+}
+
+//Main auxiliary functions
+
+async function NetworkSource(type, key, term, {metatag = null, query_type = null, word_mode = null, element = null, process = true} = {}) {
+    const printer = Debug.getFunctionPrint('NetworkSource');
+    const CONFIG = SOURCE_CONFIG[type];
+    if (CONFIG.invalid?.(term)) {
+        printer.log("Invalid search term for", query_type ?? type, ':', term);
+        return [];
+    }
+    printer.log("Querying", type, ':', term);
+    let url_addons = $.extend({limit: IAC.source_results_returned}, CONFIG.data(term, query_type));
+    let network_data = await Danbooru.query(CONFIG.url, url_addons);
+    if (!network_data || !Utility.isArray(network_data)) {
+        return [];
+    }
+    var data = network_data.map((item) => CONFIG.map(item, term));
+    var expiration_time = CONFIG.expiration(data);
+    var save_data = Utility.deepCopy(data);
+    Storage.saveData(key, {value: save_data, expires: Utility.getExpires(expiration_time)});
+    if (process) {
+        return ProcessSourceData(type, key, term, metatag, query_type, word_mode, data, element, false);
+    }
+}
+
+function AnySourceIndexed(keycode) {
+    var type = SOURCE_KEY[keycode];
+    return async function (term, {prefix, autocomplete} = {}) {
+        if ((!SOURCE_CONFIG[type].spaces_allowed || Utility.isString(prefix)) && term.match(/\S\s/)) {
+            return [];
+        }
+        term = term.trim();
+        if (term === "") {
+            switch (type) {
+                case 'user':
+                    return TypeBlankResults('user', 'us', prefix, USER_OPTION_METATAGS, autocomplete);
+                case 'favgroup':
+                    return TypeBlankResults('favgroup', 'fg', prefix, FAVGROUP_OPTION_METATAGS, autocomplete);
+                case 'pool':
+                    return TypeBlankResults('pool', 'pl', prefix, POOL_OPTION_METATAGS, autocomplete);
+                case 'search':
+                    return TypeBlankResults('search', 'ss', prefix, SAVED_SEARCH_OPTION_METATAGS, autocomplete);
+                default:
+                    return [];
+            }
+        }
+        var word_mode = false;
+        if (type === 'tag' && !term.startsWith('/') && !term.endsWith('*')) {
+            word_mode = term.length > 1 &&
+                        !(
+                            IAC.word_start_matches ||
+                            (SOURCE_CONFIG.tag === SOURCE_CONFIG.tag2) ||
+                            (IAC.alternate_tag_wildcards && Boolean(term.match(/\*/)))
+                        );
+            term += (!word_mode && !term.endsWith('*') ? '*' : "");
+        } else {
+            term += (term.endsWith('*') ? "" : '*');
+            term = (SOURCE_CONFIG[type].search_start ? "" : "*") + term;
+        }
+        var key = (keycode + '-' + term).toLowerCase();
+        var metatag = (Utility.isString(prefix) ? prefix : "");
+        var query_type = GetQueryType(autocomplete.element.get(0));
+        var final_data = null;
+        if (!IAC.network_only_mode) {
+            var max_expiration = MaximumExpirationTime(type);
+            var cached = await Storage.checkData(key, max_expiration);
+            if (ValidateCached(cached, type, term, word_mode)) {
+                RecheckSourceData(type, key, term, cached);
+                final_data = ProcessSourceData(type, key, term, metatag, query_type, word_mode, cached.value, autocomplete.element.get(0), false);
+            }
+        }
+        if (!final_data) {
+            final_data = NetworkSource(type, key, term, {metatag, query_type, word_mode, element: autocomplete.element.get(0)});
+        }
+        return final_data;
+    };
+}
+
+function RecheckSourceData(type, key, term, data) {
+    const printer = Debug.getFunctionPrint('RecheckSourceData');
+    if (IAC.recheck_data_interval > 0) {
+        let recheck_time = data.expires - GetRecheckExpires();
+        if (!Utility.validateExpires(recheck_time)) {
+            printer.log("Rechecking", type, ':', term);
+            NetworkSource(type, key, term, {process: false});
+        }
+    }
+}
+
+function ProcessSourceData(type, key, term, metatag, query_type, word_mode, data, element, is_blank) {
+    if (query_type === 'tag-query') {
+        switch (type) {
+            case 'user':
+                data = UserOptions(term, metatag, data);
+                break;
+            case 'favgroup':
+                data = FavgroupOptions(term, metatag, data);
+                break;
+            case 'pool':
+                data = PoolOptions(term, metatag, data);
+                break;
+            case 'search':
+                data = SavedSearchOptions(term, metatag, data);
+                // falls through
+            default:
+                // do nothing
+        }
+    }
+    data.forEach((val) => {
+        FixupMetatag(val, metatag);
+        Utility.assignObjects(val, {term, key, type});
+    });
+    KeepSourceData(type, metatag, data);
+    if (type === 'tag') {
+        if (IAC.alternate_sorting_enabled) {
+            SortSources(data);
+        }
+        if (IAC.metatag_source_enabled) {
+            if (query_type !== 'tag') {
+                let regex = new RegExp('^' + Utility.regexpEscape(term).replace(/\\\*/g, '.*'));
+                let filter_data = MetatagData(query_type).filter((data) => data.name.match(regex));
+                let metatag_term = term + (term.endsWith('*') ? "" : '*');
+                let add_data = filter_data.map((item) => Utility.assignObjects({term: metatag_term}, item));
+                data.unshift(...add_data);
+            }
+        }
+        if (IAC.source_grouping_enabled) {
+            GroupSources(data);
+        }
+    }
+    if (IAC.usage_enabled) {
+        AddUserSelected(type, metatag, term, data, query_type, word_mode, key, is_blank);
+    }
+    if (IAC.is_bur && IAC.BUR_source_enabled && element.id === 'bulk_update_request_script') {
+        let line_text = element.value.substring(0, element.selectionStart).split('\n').at(-1).trim();
+        let words = line_text.split(/\s+/);
+        if (words.length === 1) {
+            // Show only BUR commands for the first word of each line.
+            data = GetConstantMatches(BUR_DATA, term);
+        } else if ((words.length > 2 && words.at(-1) === '->') || (words.length > BUR_LIMITS[words[0]])) {
+            // For the 3rd word and beyond, don't show the autocomplte when the right arrow is detected.
+            return [];
+        } else if (words[0] === 'category' && words.length > 3) {
+            // Show tag categories for the 4th word of the category command.
+            data = GetConstantMatches(CATEGORY_DATA, term);
+        }
+    }
+    //Doing this here to avoid processing it on each list item
+    IAC.highlight_used = query_type === 'tag-edit';
+    if (IAC.highlight_used) {
+        let adjusted_tag_string = RemoveTerm(element.value, element.selectionStart);
+        IAC.current_tags = adjusted_tag_string.split(/\s+/);
+    }
+    return data;
+}
+
+//Main execution functions
+
+function SetupAutocompleteInitializations() {
+    switch (IAC.controller) {
+        case 'wiki-pages':
+        case 'wiki-page-versions':
+            RebindAnyAutocomplete('[data-autocomplete=wiki-page]', 'wp');
+            break;
+        case 'artists':
+        case 'artist-versions':
+        case 'artist-urls':
+            RebindAnyAutocomplete('[data-autocomplete=artist]', 'ar');
+            break;
+        case 'pools':
+        case 'pool-versions':
+            RebindAnyAutocomplete('[data-autocomplete=pool]', 'pl');
+            break;
+        case 'favorite-groups':
+            RebindAnyAutocomplete('[data-autocomplete=favorite-group]', 'fg');
+            break;
+        case 'posts':
+            if (IAC.action === 'index') {
+                RebindAnyAutocomplete('[data-autocomplete=saved-search-label]', 'ss', true);
+            }
+            break;
+        case 'saved-searches':
+            if (IAC.action === 'index') {
+                DelayInitializeTagAutocomplete('#search_query_ilike', 'tag-query');
+                RebindAnyAutocomplete('[data-autocomplete=saved-search-label]', 'ss');
+            } else if (IAC.action === 'edit') {
+                DelayInitializeTagAutocomplete('#saved_search_query', 'tag-query');
+                RebindAnyAutocomplete('[data-autocomplete=saved-search-label]', 'ss', true);
+            }
+            break;
+        case 'forum-posts':
+            if (IAC.action === 'search') {
+                DelayInitializeAutocomplete('#search_topic_title_matches', 'ft');
+            }
+            break;
+        case 'comments':
+            DelayInitializeTagAutocomplete();
+            break;
+        case 'uploads':
+            if (IAC.action === 'index') {
+                DelayInitializeTagAutocomplete('#search_post_tags_match', 'tag-query');
+            }
+            break;
+        case 'bulk-update-requests':
+            if (IAC.is_bur) {
+                DelayInitializeTagAutocomplete('#bulk_update_request_script', 'tag-edit');
+            }
+            break;
+        case 'related-tags':
+            DelayInitializeTagAutocomplete('#search_query', 'tag-query');
+            //falls through
+        default:
+            //do nothing
+    }
+    if ($('[data-autocomplete=tag]').length) {
+        RebindSingleTag();
+    }
+    if ($(AUTOCOMPLETE_MULTITAG_SELECTORS).length) {
+        RebindMultipleTag();
+    }
+    if ($(AUTOCOMPLETE_USER_SELECTORS).length) {
+        RebindAnyAutocomplete(AUTOCOMPLETE_USER_SELECTORS, 'us');
+    }
+    if (IAC.text_input_autocomplete_enabled) {
+        InitializeTextAreaAutocomplete();
+    }
+}
+
+function CleanupTasks() {
+    PruneUsageData();
+    Storage.pruneProgramCache();
+}
+
+//Cache functions
+
+function UpdateLocalData(key, data) {
+    switch (key) {
+        case 'iac-choice-info':
+            IAC.choice_order = data.choice_order;
+            IAC.choice_data = data.choice_data;
+            StoreUsageData('save', "", false);
+            //falls through
+        default:
+            //Do nothing
+    }
+}
+
+//Settings functions
+
+function BroadcastIAC(event) {
+    const printer = Debug.getFunctionPrint('BroadcastIAC');
+    printer.log(`(${event.data.type}): ${event.data.name} ${event.data.key}`);
+    switch (event.data.type) {
+        case 'text_autocomplete':
+            IAC.ac_source = event.data.source;
+            IAC.ac_mode = event.data.mode;
+            IAC.ac_caps = event.data.caps;
+            break;
+        case 'reload':
+            IAC.choice_order = event.data.choice_order;
+            IAC.choice_data = event.data.choice_data;
+            //falls through
+        default:
+            //do nothing
+    }
+}
+
+function RemoteSettingsCallback() {
+    SetTagAutocompleteSource();
+}
+
+function SetTagAutocompleteSource() {
+    if (IAC.alternate_tag_source) {
+        SOURCE_CONFIG.tag = SOURCE_CONFIG.tag2;
+    } else {
+        SOURCE_CONFIG.tag = SOURCE_CONFIG.tag1;
+    }
+}
+
+function GetUsageExpires() {
+    return IAC.usage_expires * Utility.one_day;
+}
+
+function GetRecheckExpires() {
+    return IAC.recheck_data_interval * Utility.one_day;
+}
+
+function InitializeProgramValues(override = false) {
+    if (InitializeProgramValues.initialized) return;
+    const printer = Debug.getFunctionPrint('InitializeProgramValues');
+    if (!override && document.querySelector(AUTOCOMPLETE_ALL_SELECTORS) === null) {
+        printer.warn("No autocomplete inputs! Exiting...");
+        return false;
+    }
+    Utility.assignObjects(IAC, {
+        user_id: DanbooruProxy.CurrentUser.data('id'),
+        choice_info: Storage.getLocalData('iac-choice-info', {default_val: {}}),
+        is_bur: (IAC.controller === 'bulk-update-requests') && ['edit', 'new'].includes(IAC.action),
+        prefixes: JSON.parse(Utility.getMeta('autocomplete-tag-prefixes')),
+    }, PROGRAM_RESET_KEYS);
+    Utility.assignObjects(IAC, {
+        categories: IAC.prefixes.filter((key) => (!['-', '~'].includes(key))).map((key) => (key.slice(0, -1))),
+        tag_source: AnySourceIndexed('ac'),
+        pool_source: AnySourceIndexed('pl'),
+        user_source: AnySourceIndexed('us'),
+        favorite_group_source: AnySourceIndexed('fg'),
+        saved_search_source: AnySourceIndexed('ss'),
+        static_metatag_source: StaticMetatagSource,
+    });
+    if (Utility.isHash(IAC.choice_info)) {
+        IAC.choice_order = IAC.choice_info.choice_order;
+        IAC.choice_data = IAC.choice_info.choice_data;
+        CorrectUsageData();
+    }
+    SetTagAutocompleteSource();
+    InitializeProgramValues.initialized = true;
+    return true;
+}
+
+function RenderSettingsMenu() {
+    $('#indexed-autocomplete').append(Menu.renderMenuFramework(MENU_CONFIG));
+    $('#iac-general-settings-message').append(Menu.renderExpandable("Text autocomplete details", TEXT_AUTOCOMPLETE_DETAILS));
+    $('#iac-general-settings').append(Menu.renderDomainSelectors());
+    $('#iac-general-settings').append(Menu.renderCheckbox('text_input_autocomplete_enabled'));
+    $('#iac-source-settings').append(Menu.renderCheckbox('BUR_source_enabled'));
+    $('#iac-source-settings').append(Menu.renderCheckbox('metatag_source_enabled'));
+    $('#iac-usage-settings-message').append(Menu.renderExpandable("Additional setting details", USAGE_SETTINGS_DETAILS));
+    $('#iac-usage-settings').append(Menu.renderCheckbox('usage_enabled'));
+    $('#iac-usage-settings').append(Menu.renderTextinput('usage_multiplier'));
+    $('#iac-usage-settings').append(Menu.renderTextinput('usage_maximum'));
+    $('#iac-usage-settings').append(Menu.renderTextinput('usage_expires'));
+    $('#iac-display-settings-message').append(Menu.renderExpandable("Additional setting details", DISPLAY_SETTINGS_DETAILS));
+    $('#iac-display-settings').append(Menu.renderTextinput('source_results_returned', 5));
+    $('#iac-display-settings').append(Menu.renderCheckbox('source_highlight_enabled'));
+    $('#iac-display-settings').append(Menu.renderCheckbox('highlight_words_enabled'));
+    $('#iac-display-settings').append(Menu.renderCheckbox('source_grouping_enabled'));
+    $('#iac-display-settings').append(Menu.renderSortlist('source_order'));
+    $('#iac-sort-settings-message').append(Menu.renderExpandable("Additional setting details", SORT_SETTINGS_DETAILS));
+    $('#iac-sort-settings').append(Menu.renderCheckbox('alternate_sorting_enabled'));
+    $('#iac-sort-settings').append(Menu.renderInputSelectors('postcount_scale', 'radio'));
+    $('#iac-sort-settings').append(Menu.renderTextinput('exact_source_weight', 5));
+    $('#iac-sort-settings').append(Menu.renderTextinput('prefix_source_weight', 5));
+    $('#iac-sort-settings').append(Menu.renderTextinput('alias_source_weight', 5));
+    $('#iac-sort-settings').append(Menu.renderTextinput('correct_source_weight', 5));
+    $('#iac-network-settings-message').append(Menu.renderExpandable("Additional setting details", NETWORK_SETTINGS_DETAILS));
+    $('#iac-network-settings').append(Menu.renderTextinput('recheck_data_interval', 5));
+    $('#iac-network-settings').append(Menu.renderCheckbox('alternate_tag_source'));
+    $('#iac-network-settings').append(Menu.renderCheckbox('alternate_tag_wildcards'));
+    $('#iac-network-settings').append(Menu.renderCheckbox('word_start_matches'));
+    $('#iac-network-settings').append(Menu.renderCheckbox('network_only_mode'));
+    $('#iac-controls').append(Menu.renderCacheControls());
+    $('#iac-cache-controls-message').append(Menu.renderExpandable("Cache Data details", CACHE_DATA_DETAILS));
+    $('#iac-cache-controls').append(Menu.renderLinkclick('cache_info', true));
+    $('#iac-cache-controls').append(Menu.renderCacheInfoTable());
+    $('#iac-cache-controls').append(Menu.renderLinkclick('purge_cache', true));
+    $('#iac-controls').append(Menu.renderCacheEditor({has_cache_data: true}));
+    $('#iac-cache-editor-message').append(Menu.renderExpandable("Program Data details", PROGRAM_DATA_DETAILS));
+    $('#iac-cache-editor-controls').append(Menu.renderKeyselect('data_source', true));
+    $('#iac-cache-editor-controls').append(Menu.renderDataSourceSections());
+    $('#iac-section-indexed-db').append(Menu.renderKeyselect('data_type', true));
+    $('#iac-section-indexed-db').append(Menu.renderKeyselect('related_tag_type', true));
+    $('#iac-section-local-storage').append(Menu.renderCheckbox('raw_data', true));
+    $('#iac-cache-editor-controls').append(Menu.renderTextinput('data_name', 20, true));
+    $('.iac-options[data-setting=related_tag_type]').hide();
+    Menu.engageUI({checkboxradio: true, sortable: true});
+    Menu.saveUserSettingsClick({local_callback: RemoteSettingsCallback});
+    Menu.resetUserSettingsClick({delete_keys: STORAGE_RESET_KEYS, local_callback: RemoteSettingsCallback});
+    Menu.cacheInfoClick();
+    Menu.purgeCacheClick();
+    Menu.expandableClick();
+    Menu.dataSourceChange();
+    Menu.rawDataChange();
+    Menu.getCacheClick();
+    Menu.saveCacheClick(UpdateLocalData);
+    Menu.deleteCacheClick();
+    Menu.listCacheClick();
+    Menu.refreshCacheClick();
+    Menu.cacheAutocomplete();
+}
+
+//Main program
+
+function Main() {
+    Load.preloadScript({
+        broadcast_func: BroadcastIAC,
+        program_css: PROGRAM_CSS,
+        light_css: LIGHT_MODE_CSS,
+        dark_css: DARK_MODE_CSS,
+        run_on_settings: true,
+    });
+    Menu.preloadMenu({
+        menu_func: RenderSettingsMenu,
+        menu_css: MENU_CSS,
+    });
+    if (!Load.isScriptEnabled() || !InitializeProgramValues()) return;
+    SetupAutocompleteInitializations();
+    Statistics.addPageStatistics();
+    Load.noncriticalTasks(CleanupTasks);
+}
+
+/****Initialization****/
+
+JSPLib.data = IAC;
+JSPLib.name = PROGRAM_NAME;
+JSPLib.shortcut = PROGRAM_SHORTCUT;
+JSPLib.data_regex = PROGRAM_DATA_REGEX;
+JSPLib.reset_data = PROGRAM_RESET_KEYS;
+JSPLib.settings_config = SETTINGS_CONFIG;
+
+Debug.mode = false;
+Debug.level = Debug.INFO;
+
+Menu.settings_callback = RemoteSettingsCallback;
+Menu.reset_callback = RemoteSettingsCallback;
+Menu.control_config = CONTROL_CONFIG;
+
+Storage.indexedDBValidator = ValidateEntry;
+Storage.localSessionValidator = ValidateProgramData;
+
+Load.exportData();
+Load.exportFuncs({always_list: [InitializeAutocompleteIndexed, InitializeTagQueryAutocompleteIndexed, InitializeTextAreaAutocomplete, InitializeProgramValues]});
+
+/****Execution start****/
+
+Load.programInitialize(Main, {required_variables: LOAD_REQUIRED_VARIABLES, required_selectors: LOAD_REQUIRED_SELECTORS});
+
+})(JSPLib);
