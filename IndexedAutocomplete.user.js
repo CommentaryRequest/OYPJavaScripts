@@ -1,31 +1,34 @@
 // ==UserScript==
-// @name         IndexedAutocomplete
+// @name         IndexedAutocomplete (OYP)
 // @namespace    https://github.com/BrokenEagle/JavaScripts
 // @version      30.0
 // @description  Uses Indexed DB for autocomplete, plus caching of other data.
 // @source       https://danbooru.donmai.us/users/23799
-// @author       BrokenEagle
-// @match        https://*.donmai.us/*
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @author       BrokenEagle (port by CommentaryRequest)
+// @match        *://yukkuri.shiteitte.net/*
+// @exclude      /^https://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedAutocomplete.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/IndexedAutocomplete.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/main/IndexedAutocomplete.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/main/IndexedAutocomplete.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/template.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/concurrency.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/statistics.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/menu.js
+// @downloadURL  https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
+// @updateURL    https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/utility.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/validate.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/storage.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/notice.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/concurrency.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/template.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/network.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/danbooru.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/load.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ jQuery */
@@ -2766,7 +2769,6 @@ function InitializeProgramValues(override = false) {
 function RenderSettingsMenu() {
     $('#indexed-autocomplete').append(Menu.renderMenuFramework(MENU_CONFIG));
     $('#iac-general-settings-message').append(Menu.renderExpandable("Text autocomplete details", TEXT_AUTOCOMPLETE_DETAILS));
-    $('#iac-general-settings').append(Menu.renderDomainSelectors());
     $('#iac-general-settings').append(Menu.renderCheckbox('text_input_autocomplete_enabled'));
     $('#iac-source-settings').append(Menu.renderCheckbox('BUR_source_enabled'));
     $('#iac-source-settings').append(Menu.renderCheckbox('metatag_source_enabled'));
