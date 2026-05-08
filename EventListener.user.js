@@ -3902,7 +3902,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $('#event-listener').append(Menu.renderMenuFramework(MENU_CONFIG));
-    $('#el-general-settings').append(Menu.renderDomainSelectors());
     $('#el-display-settings').append(Menu.renderCheckbox('display_event_notice'));
     $('#el-display-settings').append(Menu.renderCheckbox('display_event_panel'));
     $('#el-display-settings').append(Menu.renderTextinput('page_size', 10));
