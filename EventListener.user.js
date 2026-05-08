@@ -9,8 +9,8 @@
 // @exclude      /^https?://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
-// @updateURL    https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
 // @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js

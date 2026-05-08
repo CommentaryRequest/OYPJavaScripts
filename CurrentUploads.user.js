@@ -4,7 +4,7 @@
 // @version      17.0
 // @description  Gives up-to-date stats on uploads.
 // @source       https://danbooru.donmai.us/users/23799
-// @author       BrokenEagle
+// @author       BrokenEagle (port by CommentaryRequest)
 // @match        https://*.donmai.us/*
 // @exclude      /^(?!https:\/\/\w+\.donmai\.us\/(static\/site_map|settings)\/?(\?|$)).*/
 // @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
@@ -17,18 +17,6 @@
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/module.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/debug.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/utility.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/validate.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/storage.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/template.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/concurrency.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/statistics.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/network.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/danbooru.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/load.js
-// @require      https://raw.githubusercontent.com/BrokenEagle/JavaScripts/20260225/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ CanvasJS */
