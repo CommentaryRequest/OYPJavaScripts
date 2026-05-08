@@ -9,21 +9,21 @@
 // @exclude      /^https?://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/EventListener.user.js
-// @updateURL    https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/EventListener.user.js
+// @downloadURL  https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
+// @updateURL    https://raw.github.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/EventListener.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/module.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/debug.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/utility.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/validate.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/storage.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/notice.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/concurrency.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/template.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/network.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/danbooru.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/load.js
-// @require      https://github.com/CommentaryRequest/OYPJavaScripts/raw/refs/heads/master/lib/menu.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/utility.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/validate.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/storage.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/notice.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/concurrency.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/template.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/network.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/danbooru.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/load.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ */
