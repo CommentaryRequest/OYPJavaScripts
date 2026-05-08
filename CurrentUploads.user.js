@@ -1,22 +1,34 @@
 // ==UserScript==
-// @name         CurrentUploads
+// @name         CurrentUploads (OYP)
 // @namespace    https://github.com/BrokenEagle/JavaScripts
 // @version      17.0
 // @description  Gives up-to-date stats on uploads.
 // @source       https://danbooru.donmai.us/users/23799
 // @author       BrokenEagle (port by CommentaryRequest)
-// @match        https://*.donmai.us/*
-// @exclude      /^(?!https:\/\/\w+\.donmai\.us\/(static\/site_map|settings)\/?(\?|$)).*/
-// @exclude      /^https://\w+\.donmai\.us/.*\.(xml|json|atom)(\?|$)/
+// @match        *://yukkuri.shiteitte.net/*
+// @exclude      /^(?!https:\/\/yukkuri\.shiteitte\.net\/(static\/site_map|settings)\/?(\?|$)).*/
+// @exclude      /^https?://yukkuri\.shiteitte\.net/.*\.(xml|json|atom)(\?|$)/
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/CurrentUploads.user.js
-// @updateURL    https://raw.githubusercontent.com/BrokenEagle/JavaScripts/master/CurrentUploads.user.js
+// @downloadURL  https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/CurrentUploads.user.js
+// @updateURL    https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/CurrentUploads.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-getitems@1.4.2/dist/localforage-getitems.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-setitems@1.4.0/dist/localforage-setitems.min.js
 // @require      https://cdn.jsdelivr.net/npm/localforage-removeitems@1.4.0/dist/localforage-removeitems.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/validate.js/0.13.1/validate.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/canvasjs/1.7.0/canvasjs.min.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/module.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/debug.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/utility.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/validate.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/storage.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/notice.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/concurrency.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/template.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/network.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/danbooru.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/load.js
+// @require      https://raw.githubusercontent.com/CommentaryRequest/OYPJavaScripts/refs/heads/main/lib/menu.js
 // ==/UserScript==
 
 /* global JSPLib $ CanvasJS */
@@ -1885,7 +1897,6 @@ function InitializeProgramValues() {
 
 function RenderSettingsMenu() {
     $(Menu.program_selector).append(Menu.renderMenuFramework(MENU_CONFIG));
-    $('#cu-general-settings').append(Menu.renderDomainSelectors());
     $('#cu-display-settings').append(Menu.renderCheckbox('copyrights_merge'));
     $('#cu-display-settings').append(Menu.renderCheckbox('copyrights_enabled'));
     $('#cu-display-settings').append(Menu.renderTextinput('copyrights_threshold', 10));
